@@ -94,7 +94,7 @@ Consequences, now requirements:
 | 3 | Glass-to-glass latency ≤ 250 ms | |
 | 4 | Pairing completable with the remote alone, no on-screen keyboard | |
 | 5 | Codec in `?debug=1` is H.264 | |
-| 6 | **720p30 first**, dropped frames flat over 2 min; 1080p30 only if it does. Any slowdown: stop, and that is the product's ceiling | |
+| 6 | Walk up: **640x360@15** (known-good from the probe) → **720p30** → **1080p30** only if each holds flat over 2 min. Any slowdown: stop, power-cycle, and that step is the product's ceiling | |
 | 7 | Fullscreen fills the panel, host screen edges not cropped | |
 | 8 | Audio audible and in sync (click a window, hear the click) | |
 | 9 | Viewer mute button silences and restores | |
