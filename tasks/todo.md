@@ -400,11 +400,14 @@ buttons; auto-hide and restore controls; on `iceConnectionState === "failed"` at
 ### Task 13: Security pass, README and troubleshooting
 
 **Description:** Consolidate the security posture with tests: CSP present on every served route,
-origin check, token single-use, lockout, path traversal, and no secrets in any response. Write
-the README: what it is, requirements, install/run, pairing walkthrough with the Fire TV (type
-the URL once, bookmark it, then PIN only), and a troubleshooting section covering Silk
-accelerated rendering mode, Windows Firewall, mDNS/AP-isolation symptoms, autoplay policies,
-and the audio-unsupported path. Document the accepted risks from the spec plainly.
+origin check, token single-use, lockout, path traversal, and no secrets in any response. **The
+README half was drafted early (user request, 2026-10-18)** — what it is, requirements, quick start,
+the API by hand, the security model, known limits, troubleshooting and the license; what remains
+here is re-verifying it from a clean checkout once there is an app to run, finishing the Fire TV
+pairing walkthrough (type the URL once, bookmark it, then PIN only) and covering Silk accelerated
+rendering, Windows Firewall, mDNS/AP-isolation symptoms, autoplay policies and the
+audio-unsupported path in the troubleshooting table. Document the accepted risks from the spec
+plainly.
 
 **Acceptance criteria:**
 - [ ] A test asserts the security headers and CSP on every route, including 404s

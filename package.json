@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Local Wi-Fi screen + system audio mirroring for Fire TV and phones",
+  "license": "MIT",
+  "description": "Local Wi-Fi screen + system audio mirroring for Fire TV and phones (Deskreen alternative)",
   "main": "dist/main/main.js",
   "scripts": {
     "dev": "node scripts/dev.mjs",
