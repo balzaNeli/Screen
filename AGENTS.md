@@ -1,16 +1,77 @@
-# AGENTS.md - Guidelines for Deskreen Alternative Project
+# screenmirror — agent notes
 
-## Role & Identity
-You are a Senior Full-Stack and Desktop Software Engineer. You write clean, production-grade, maintainable TypeScript code. You strictly follow the `agent-skills` lifecycle workflows: Spec first, Plan atomic tasks, Build incrementally, and Verify rigorously.
+Lan-only screen + system audio mirroring. An Electron host captures the screen and sends it over
+WebRTC to a browser viewer. The primary viewer is an Amazon Fire TV running Silk; phones/tablets
+are secondary. Nothing ever leaves the local network — no STUN, no TURN, no cloud.
 
-## Tech Stack & Architecture
-- **Desktop Host App:** Electron (or Tauri) + React + TypeScript.
-- **Screen Capture:** Native WebRTC / `desktopCapturer` APIs.
-- **Web Client (Viewer):** Lightweight React/HTML5 SPA hosted locally, using HTML5 `<video>` for low-latency WebRTC streaming.
-- **Signaling & Pairing:** Embedded Node.js HTTP/WebSocket server over local Wi-Fi, featuring secure QR code / numeric PIN pairing.
+`SPEC.md` (rev 5, approved) is the source of truth for behaviour, `tasks/plan.md` maps phases and
+checkpoints, `tasks/todo.md` holds the per-task acceptance criteria. Spec first, then tasks, then
+code — and keep all three in step with the code: commits name the spec task they implement. There
+is no README yet (that is Task 13).
 
-## Core Engineering Rules (Non-Negotiable)
-1. **Spec Before Code:** Never write implementation code without an approved specification (`/spec`) detailing objectives, architecture, and boundaries.
-2. **Atomic Planning:** Break down complex features into small, verifiable, sequential tasks (`/plan`).
-3. **Incremental Implementation:** Build in thin vertical slices (`/build`). Test and verify each slice before moving to the next.
-4. **Security & Privacy:** Ensure all streams remain strictly local over the LAN with end-to-end local WebRTC encryption. Handle permissions and error recovery robustly.
+## Commands
+
+- `npm run verify` — lint + test + build. This is the gate; **there is no CI**. Run it before
+  every commit.
+- `npm test` / `npm run coverage` — `node --test "tests/**/*.test.ts"`. The glob form is required;
+  `node --test tests/` does not work. Node 24 strips the types, there is no compile step.
+- `npm run build` — `build:main` (`tsc -p tsconfig.main.json` → `dist/`) then `build:web`
+  (vite → `dist/renderer`, `dist/viewer`).
+- `npm run serve` — standalone HTTP server on `:4680` (`PORT=` overrides), for the Fire TV.
+  It loads `dist/`, so build first. `npm start` currently aliases this (Task 8 points it at
+  Electron).
+- `npm run dev` — **does not work yet**: it spawns `npx electron`, and `electron` is not a
+  dependency until Task 8.
+- `npm run lint` — `eslint . --max-warnings 0`. `docs/**` is ignored on purpose.
+
+## Type checking stops short of the React apps
+
+`npm run build:main` checks only `src/main`, `src/preload`, `src/server`, `src/shared`. Nothing
+type-checks `src/renderer`, `src/viewer`, `tests/` or `scripts/` — Vite strips types without
+checking them, and the eslint config is not type-aware. Run `npx tsc -p tsconfig.json` (noEmit,
+covers everything, currently clean) after touching those.
+
+## TypeScript quirks that will bite
+
+- Relative imports carry the real extension: `import { startServer } from "../src/server/http.ts"`.
+  `rewriteRelativeImportExtensions` turns them into `.js` in `dist`. Do not "fix" the `.ts`.
+- `erasableSyntaxOnly`: no `enum`, no `namespace`, no constructor parameter properties.
+- `verbatimModuleSyntax`: type-only imports need `import type` / inline `type`.
+- `strict` + `noUncheckedIndexedAccess`.
+- No formatter is configured — match the surrounding style (double quotes, semicolons, 2 spaces,
+  ~100 columns).
+- Tests use `node:test` + `node:assert/strict`, and they exercise the real code: `startServer({
+  port: 0, ... })` against a temp web root (`fixture` / `withServer` in `tests/http.test.ts`).
+  Do not mock our own modules.
+- Git prints "LF will be replaced by CRLF" on this Windows checkout (`core.autocrlf=true`, LF in
+  the index). Expected, not a bug to fix.
+
+## Wiring worth knowing before you touch it
+
+- `src/shared/` is runtime-free and pure — the only place testable without a browser or Electron:
+  `protocol.ts` (`Signal` union + `parseSignal`, the boundary guard for anything off a socket),
+  `codecs.ts` (`preferH264`), `audio.ts` (`audioModeFor`), `rtc.ts` (`RTC_CONFIG`).
+- `src/server/http.ts` is the entire LAN surface: viewer page at `/`, `/assets/*` through a
+  containment check, `/api/info`, and `/probe*` from a fixed-name allowlist (`PROBE_FILES`). The
+  host UI is deliberately **not** served here — it shows the PIN, so it stays on `file://`.
+- `src/server/pairing.ts` is a pure store with the clock injected: PIN TTL/rotation/lockout,
+  single-use tokens, one viewer seat. `src/server/lan.ts` is pure when handed an interface map.
+- The server is built, tested and usable before Electron exists (Tasks 1–7). `scripts/serve.mjs`
+  is what makes the Fire TV reachable today; `npm start` follows it.
+
+## Non-negotiables
+
+- **The viewer is receive-only.** Never `getUserMedia`, `getDisplayMedia`, a permission request or
+  a `navigator.mediaDevices` feature test — Silk on Fire TV hides that object (no camera/mic), and
+  that hidden object is why the web believes "Silk has no WebRTC". It does.
+- **No STUN/TURN, ever.** `RTC_CONFIG.iceServers` stays empty and frozen. Task 14 adds the grep
+  gate to `npm run verify`; until then it is enforced by review.
+- **Strict CSP on every response** (`src/server/http.ts`), so no served page may use inline
+  `<script>`/`<style>` — that is why `docs/silk-probe.*` are separate files that Vite never sees.
+- Signaling relays `Signal` frames verbatim and never parses SDP.
+- New runtime dependencies need a very good reason: `ws` + `qrcode` are the budget (`react`,
+  `react-dom` are bundled into the two SPAs by Vite).
+- Nothing heavy runs on a Fire TV for fun. A 720p30 `MediaRecorder` → `MediaSource` loopback
+  froze an AFTCA002 hard enough to need a power cycle; that transport is rejected in `SPEC.md`.
+  Hardware results live in `docs/manual-tests.md`, and the probe page is at `/probe` — its risky
+  check is gated behind a second confirming click.
