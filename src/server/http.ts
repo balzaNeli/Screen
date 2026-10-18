@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import {
   createServer,
@@ -10,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createPairing, type Pairing } from "./pairing.ts";
+import { attachSignalRelay, type ViewerInfo } from "./ws.ts";
 
 // Same depth from src/server/ and dist/server/, so this works before and after a build.
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -46,13 +48,17 @@ export type ServerOptions = {
   docsRoot?: string;
   /** The host window owns the store (it is the only thing allowed to see the PIN). */
   pairing?: Pairing;
+  /** Boot secret for the host socket over loopback; generated here when not injected. */
+  hostToken?: string;
 };
 
 export type RunningServer = {
   port: number;
   close: () => Promise<void>;
-  /** Fires when a viewer has spent a valid PIN, before its socket connects. */
-  onPaired: (listener: (sessionId: string) => void) => void;
+  /** The host window needs this to open its own socket to `/ws`. Never sent to a viewer. */
+  hostToken: string;
+  /** Called when a viewer socket attaches or leaves, so the host window can be pushed new state. */
+  onViewerChange: (listener: (viewer: ViewerInfo | null) => void) => void;
 };
 
 function headers(contentType: string): Record<string, string> {
@@ -115,7 +121,6 @@ async function handlePair(
   req: IncomingMessage,
   res: ServerResponse,
   pairing: Pairing,
-  paired: (sessionId: string) => void,
 ): Promise<void> {
   const pin = pinFrom(await readJson(req, MAX_BODY_BYTES));
   if (pin === null) return sendJson(res, 400, { error: "bad_request" });
@@ -123,7 +128,6 @@ async function handlePair(
   const result = pairing.verify(pin);
   switch (result.kind) {
     case "paired":
-      paired(result.sessionId);
       return sendJson(res, 200, { token: result.token });
     case "invalid_pin":
       return sendJson(res, 401, { error: "invalid_pin", attemptsLeft: result.attemptsLeft });
@@ -167,11 +171,9 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   const docsRoot = path.resolve(options.docsRoot ?? path.join(repoRoot, "docs"));
   const host = options.host ?? "0.0.0.0";
   const pairing = options.pairing ?? createPairing();
+  const hostToken = options.hostToken ?? randomBytes(32).toString("hex");
 
-  const pairedListeners = new Set<(sessionId: string) => void>();
-  const emitPaired = (sessionId: string): void => {
-    for (const listener of pairedListeners) listener(sessionId);
-  };
+  const viewerListeners = new Set<(viewer: ViewerInfo | null) => void>();
 
   const server: Server = createServer((req, res) => {
     void (async () => {
@@ -180,7 +182,7 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
 
       if (route === "/api/pair") {
         if (req.method !== "POST") return send(res, 405, "text/plain", "method not allowed");
-        await handlePair(req, res, pairing, emitPaired);
+        await handlePair(req, res, pairing);
         return;
       }
       if (req.method !== "GET") {
@@ -222,15 +224,28 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
     if ((err as NodeJS.ErrnoException).code !== "EADDRINUSE") throw err;
     port = await listen(server, 0, host); // the requested port is busy: take any free one
   }
+
+  const relay = attachSignalRelay({
+    server,
+    pairing,
+    hostToken,
+    onViewerChange: (viewer) => {
+      for (const listener of viewerListeners) listener(viewer);
+    },
+  });
+
   return {
     port,
-    close: () =>
-      new Promise<void>((resolve, reject) => {
+    hostToken,
+    close: async () => {
+      await relay.close(); // terminates sockets, so the http server can close right after
+      await new Promise<void>((resolve, reject) => {
         server.closeAllConnections();
         server.close((err) => (err ? reject(err) : resolve()));
-      }),
-    onPaired: (listener) => {
-      pairedListeners.add(listener);
+      });
+    },
+    onViewerChange: (listener) => {
+      viewerListeners.add(listener);
     },
   };
 }

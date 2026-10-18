@@ -192,13 +192,17 @@ Ports and IPs are the platform's; no config file.
 | `GET /` | — | viewer HTML (CSP header, no token in path) |
 | `GET /assets/*` | — | static viewer bundle; resolved path must stay inside `dist/viewer/` (404 otherwise) |
 | `GET /api/info` | — | `200 { name, version, pairingOpen: boolean, lockedUntilMs }` — no secrets |
-| `POST /api/pair` | `{ pin: string, deviceName: string }` | `200 { token }` · `401 { error: "invalid_pin" }` · `429 { error: "locked", retryAfterMs }` · `409 { error: "busy" }` |
-| `WS /ws?token=<token>` | JSON `Signal` | relay of `Signal` to the opposite peer · `close 1008` on bad/replayed token or bad `Origin` |
+| `POST /api/pair` | `{ pin: string }`, 4 KB body cap | `200 { token }` · `400 { error: "bad_request" }` · `401 { error: "invalid_pin", attemptsLeft }` · `401 { error: "expired" }` · `429 { error: "locked", retryAfterMs }` · `409 { error: "busy" }` |
+| `WS /ws?token=<token>` | JSON `Signal` | viewer socket · `close 1008` on bad/replayed token or bad `Origin` |
+| `WS /ws?host=<hostToken>` | JSON `Signal` | host socket · **loopback only** and the boot token · `close 1008` otherwise |
 
 Signaling rules: the server **relays, never parses** SDP. Exactly one host and one viewer
-socket per session. `stop` from host closes the viewer socket after delivery. Messages are
-dropped (not fatal) if `parseSignal` returns `null`. Audio and codec choice need **no** protocol
-change: audio is another track, the codec is chosen by `setCodecPreferences` before the offer.
+socket per session. `stop` from host closes both sockets after delivery. Messages are
+dropped (not fatal) if `parseSignal` returns `null`; a frame larger than 256 KB closes the socket
+(`1009`). A malformed `POST /api/pair` body is a `400` and is *not* counted as a failed attempt,
+so a flood of junk cannot lock the host out of its own pairing screen. Audio and codec choice need
+**no** protocol change: audio is another track, the codec is chosen by `setCodecPreferences`
+before the offer.
 
 Host renderer ↔ main IPC (preload exposes only this):
 
@@ -224,7 +228,10 @@ Default quality is **1080p** (TV target), user-selectable.
 - 6-digit PIN, `crypto.randomInt`, regenerated on expiry/rotation, TTL 60 s, re-issued on demand.
 - 3 failed attempts → 60 s lockout, PIN rotated, failure count reset.
 - Success → 32-byte `crypto.randomBytes` hex token, single-use at WS connect, bound to that
-  connection, dropped when the connection closes. Max 1 live viewer.
+  connection, dropped when the connection closes. Max 1 live viewer. A viewer that pairs and
+  never connects loses the seat (and the token) after 30 s, so a closed tab cannot block pairing.
+- The **host socket** authenticates with a separate 32-byte boot token (handed to the host window
+  over IPC) *and* must connect from loopback; a viewer can never claim the host role.
 - PIN and token are never logged, never written to disk, never sent to `/api/info`.
 - `?p=` is read client-side, used to prefill, then scrubbed with `history.replaceState` so the
   PIN does not sit in the address bar, history, or a Silk bookmark.

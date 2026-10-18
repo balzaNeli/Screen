@@ -52,8 +52,12 @@ covers everything, currently clean) after touching those.
   `protocol.ts` (`Signal` union + `parseSignal`, the boundary guard for anything off a socket),
   `codecs.ts` (`preferH264`), `audio.ts` (`audioModeFor`), `rtc.ts` (`RTC_CONFIG`).
 - `src/server/http.ts` is the entire LAN surface: viewer page at `/`, `/assets/*` through a
-  containment check, `/api/info`, and `/probe*` from a fixed-name allowlist (`PROBE_FILES`). The
-  host UI is deliberately **not** served here — it shows the PIN, so it stays on `file://`.
+  containment check, `/api/info`, `/api/pair`, `/probe*` from a fixed-name allowlist
+  (`PROBE_FILES`), and the `ws` upgrade for `/ws`. The host UI is deliberately **not** served
+  here — it shows the PIN, so it stays on `file://`.
+- `src/server/ws.ts` is the signalling relay: one host socket (boot `hostToken`, loopback only)
+  and one viewer socket (single-use pairing token, same-origin), frames validated by `parseSignal`
+  and never buffered. `stop` closes both; a drop frees the seat and tells the host with `bye`.
 - `src/server/pairing.ts` is a pure store with the clock injected: PIN TTL/rotation/lockout,
   single-use tokens, one viewer seat. `src/server/lan.ts` is pure when handed an interface map.
 - The server is built, tested and usable before Electron exists (Tasks 1–7). `scripts/serve.mjs`

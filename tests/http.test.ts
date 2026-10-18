@@ -246,7 +246,7 @@ test("POST /api/pair: wrong PIN, three strikes, lockout, and the PIN is never ec
 });
 
 test("POST /api/pair: one viewer at a time, the token survives the refusal, revoke frees it", async (t) => {
-  const { base, pairing, server } = await pairingServer(t);
+  const { base, pairing } = await pairingServer(t);
   const pair = (value: unknown) =>
     fetch(`${base}/api/pair`, {
       method: "POST",
@@ -254,23 +254,18 @@ test("POST /api/pair: one viewer at a time, the token survives the refusal, revo
       body: JSON.stringify({ pin: value }),
     });
 
-  const seen: string[] = [];
-  server.onPaired((sessionId) => seen.push(sessionId));
-
   const first = await pair(pairing.status().pin);
   assert.equal(first.status, 200);
   const { token } = (await first.json()) as { token: string };
-  assert.equal(seen.length, 1);
-  assert.equal(seen[0], pairing.status().viewer?.id);
+  const sessionId = pairing.status().viewer?.id ?? "";
 
   // A second viewer is refused while the seat is taken, and the issued token still works.
   assert.equal((await pair(pairing.status().pin)).status, 409);
-  assert.equal(pairing.consume(token), seen[0]);
+  assert.equal(pairing.consume(token), sessionId);
 
   const info = (await (await fetch(`${base}/api/info`)).json()) as Record<string, unknown>;
   assert.equal(info.pairingOpen, false);
 
-  const sessionId = seen[0] ?? "";
   pairing.revoke(sessionId);
   const after = (await (await fetch(`${base}/api/info`)).json()) as Record<string, unknown>;
   assert.equal(after.pairingOpen, true);

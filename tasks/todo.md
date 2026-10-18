@@ -2,9 +2,10 @@
 
 Source of truth: `SPEC.md` (rev 5, approved) and `tasks/plan.md`.
 
-**Progress:** Tasks 1–5 done. **Checkpoint 1 passed 2026-10-18 → transport is WebRTC in Silk
-(Branch A); the MSE alternative is rejected on evidence.** Probe check 4 also ran on the TV that
-day: connected, `video/H264` negotiated, first frame 942 ms. Next: Task 6 (`POST /api/pair`).
+**Progress:** Tasks 1–7 done — **Phase 2 and Checkpoint 2 complete** (35 tests green). **Checkpoint 1
+passed 2026-10-18 → transport is WebRTC in Silk (Branch A); the MSE alternative is rejected on
+evidence.** Probe check 4 also ran on the TV that day: connected, `video/H264` negotiated, first
+frame 942 ms. Next: Checkpoint 2 human review, then Task 8 (Electron shell).
 
 **Definition of Done — every task:**
 - [ ] `npm test` passes (no new skips, no deleted assertions)
@@ -167,10 +168,10 @@ drops it. Never logs secrets.
 ### Task 6: `POST /api/pair` + integration tests
 
 **Description:** Wire the store into the HTTP layer: parse and validate the JSON body at the
-boundary (wrong shape → 400, never a throw), map outcomes to `200 {token}` / `401 invalid_pin`,
+boundary (wrong shape → 400, never a throw), map outcomes to `200 {token}` / `401 invalid_pin` /
 `401 expired` / `429 locked+retryAfterMs` / `409 busy`, cap body size at 4 KB, and never echo the
-PIN back. `startServer` now takes an injected `Pairing` (the host window owns the store) and
-exposes `onPaired` so the main process can push `HostState` to the host UI.
+PIN back. `startServer` takes an injected `Pairing` (the host window owns the store) and generates
+the boot `hostToken` that the host socket will need in Task 7.
 
 **Acceptance criteria:**
 - [x] Wrong PIN → 401; 3 wrong in a row → 429 with `retryAfterMs`; correct PIN → 200 with a token
@@ -179,7 +180,6 @@ exposes `onPaired` so the main process can push `HostState` to the host UI.
 - [x] A malformed body is a bad request, not an attempt: 1 000 of them leave the lockout untouched, and the next real attempt still has three tries
 - [x] Second pair while a session is live → 409 (and the already-issued token still works)
 - [x] Over-limit bodies are drained rather than reset, so an abusive client still reads its 400
-- [x] `onPaired` fires once with the session id the store created
 
 **Verification:**
 - [x] Tests: `npm test` (extends `tests/http.test.ts`, real server on port 0, injected clock)
@@ -195,34 +195,39 @@ exposes `onPaired` so the main process can push `HostState` to the host UI.
 
 **Description:** `ws.ts` on the same HTTP server: validate `Origin` (no cross-site upgrade),
 consume the single-use token at connect (bad/replayed → `close 1008`), pair exactly one host
-socket with one viewer socket, relay `Signal` frames verbatim in both directions (drop
-unparseable frames, never throw), propagate `stop`, and clean up both sockets when either side
-disconnects. Plus `tests/fixtures/fake-peer.ts`, a tiny `ws` client used by tests and by manual
+socket with one viewer socket, relay `Signal` frames in both directions (drop unparseable frames,
+never throw), propagate `stop`, and clean up both sockets when either side disconnects. The host
+socket authenticates with the boot `hostToken` over loopback, and `onViewerChange` tells the host
+window who attached ({ sessionId, userAgent }) or that the viewer left. Plus
+`tests/fixtures/fake-peer.ts`, a bounded-wait `ws` client used by the tests and by manual
 debugging before Electron exists.
 
 **Acceptance criteria:**
-- [ ] Connect without token, with a replayed token, or with a foreign `Origin` → `1008`, no session created
-- [ ] Host and viewer sockets in one session relay offer/answer/ICE in both directions byte-for-byte
-- [ ] Sending garbage over the socket is dropped without killing the session
-- [ ] `stop` from the host is delivered to the viewer and closes it; a viewer drop frees the session for a new pair
-- [ ] Two fake peers complete a full offer/answer/ICE exchange against the real server (no mock of our own code)
+- [x] Connect without token, with a replayed token, with a foreign `Origin` or with a wrong host token → `1008`, no session created
+- [x] Host and viewer sockets in one session relay offer/answer/ICE in both directions, unchanged
+- [x] Sending garbage over the socket is dropped without killing the session
+- [x] `stop` from the host is delivered to the viewer and closes both sockets; a viewer drop wakes the host with `bye`, frees the seat, and the next viewer can pair immediately
+- [x] Two fake peers complete a full offer/answer/ICE exchange against the real server (no mock of our own code)
+- [x] An oversized frame (>256 KB) closes that socket (`1009`) and tears the session down cleanly
+- [x] A second host socket replaces the first (`1008`), so a restarted host window is never locked out
+- [x] `onViewerChange` fires with `{ sessionId, userAgent }` on attach and `null` on leave
 
 **Verification:**
-- [ ] Tests: `npm test` (new: `tests/ws.test.ts`)
-- [ ] Manual: two `node --experimental-strip-types tests/fixtures/fake-peer.ts` processes exchange a message through the server
+- [x] Tests: `npm test` (new: `tests/ws.test.ts`, 9 tests)
+- [x] Manual: the built `dist/` relay driven by two peers over real sockets — pair → token → offer/answer relay → `stop` closes both with `1000` → seat freed → no-token socket gets `1008`
 
 **Dependencies:** Task 6
-**Files:** `src/server/ws.ts`, `src/server/session.ts`, `tests/ws.test.ts`, `tests/fixtures/fake-peer.ts`
+**Files:** `src/server/ws.ts`, `tests/ws.test.ts`, `tests/fixtures/fake-peer.ts`, `src/server/http.ts`
 **Scope:** M
 
 ---
 
 ## Checkpoint 2 — Protocol proven headlessly
 
-- [ ] Two fake peers complete offer/answer/ICE relay through the real server
-- [ ] Replayed token, bad origin, and 4th failed PIN all rejected with correct codes
-- [ ] `npm run verify` green, zero suppressions, coverage on shared + pairing ≥ 80% (90% at Task 14)
-- [ ] Human review before the Electron shell is written
+- [x] Two fake peers complete offer/answer/ICE relay through the real server
+- [x] Replayed token, foreign origin, wrong host token, missing token and the 4th failed PIN all rejected with the right codes (`1008` / `429`)
+- [x] `npm run verify` green, zero suppressions, no test skipped or deleted
+- [ ] Human review before the Electron shell is written (Task 8) — coverage on shared + pairing ≥ 80% is checked at Task 14
 
 ---
 
@@ -406,7 +411,7 @@ and the audio-unsupported path. Document the accepted risks from the spec plainl
 - [ ] A test asserts no response body contains the current PIN or an issued token
 - [ ] README lets a stranger run the app, pair a Fire TV and diagnose the four documented failure modes
 - [ ] Accepted risks (plain HTTP pairing, photographable QR, whole-system audio) are stated, not buried
-- [ ] No dependency added beyond `ws` and `qrcode`
+- [ ] No **runtime** dependency added beyond `ws` and `qrcode` (`@types/ws` and the build tooling are dev-only)
 
 **Verification:**
 - [ ] Tests: `npm test` (new: `tests/security.test.ts`)

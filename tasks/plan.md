@@ -62,12 +62,13 @@ Tasks are recorded in full in `tasks/todo.md` (index below mirrors it).
 ### Phase 2 — Pairing and signaling
 - [x] Task 5: Pairing store (PIN TTL, rotation, 3-strike lockout, single-use tokens) + unit tests
 - [x] Task 6: `POST /api/pair` + integration tests
-- [ ] Task 7: WebSocket signaling relay with token/origin validation + two-peer integration tests
+- [x] Task 7: WebSocket signaling relay with token/origin validation + two-peer integration tests
 
 ### Checkpoint 2 — Protocol proven headlessly
-- [ ] Two fake peers complete offer/answer/ICE relay through the real server
-- [ ] Replayed token, foreign origin and 4th failed PIN all rejected
-- [ ] `npm run verify` green
+- [x] Two fake peers complete offer/answer/ICE relay through the real server
+- [x] Replayed token, foreign origin, wrong/missing host token and the 4th failed PIN all rejected
+- [x] `npm run verify` green (35 tests)
+- [ ] Human review before the Electron shell is written
 
 ### Phase 3 — First real frame (walking skeleton)
 - [ ] Task 8: Electron shell: security posture, permission handlers, Chromium switches, preload IPC
