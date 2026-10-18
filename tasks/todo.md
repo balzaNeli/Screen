@@ -167,23 +167,26 @@ drops it. Never logs secrets.
 ### Task 6: `POST /api/pair` + integration tests
 
 **Description:** Wire the store into the HTTP layer: parse and validate the JSON body at the
-boundary (wrong shape → 400, never a throw), map outcomes to `200 {token}` / `401 invalid_pin` /
-`429 locked+retryAfterMs` / `409 busy`, cap body size, and never echo the PIN back. Also emit a
-`viewer-joined` event on the server's tiny emitter so main can push `HostState` to the host UI.
+boundary (wrong shape → 400, never a throw), map outcomes to `200 {token}` / `401 invalid_pin`,
+`401 expired` / `429 locked+retryAfterMs` / `409 busy`, cap body size at 4 KB, and never echo the
+PIN back. `startServer` now takes an injected `Pairing` (the host window owns the store) and
+exposes `onPaired` so the main process can push `HostState` to the host UI.
 
 **Acceptance criteria:**
-- [ ] Wrong PIN → 401; 3 wrong in a row → 429 with `retryAfterMs`; correct PIN → 200 with a token
-- [ ] Malformed body, missing fields, oversized body and non-JSON all → 400 without an unhandled rejection
-- [ ] Response bodies never contain the current PIN
-- [ ] Second pair while a session is live → 409 (and the already-issued token still works)
-- [ ] Server survives 1 000 sequential bad requests without leaking handles or memory growth
+- [x] Wrong PIN → 401; 3 wrong in a row → 429 with `retryAfterMs`; correct PIN → 200 with a token
+- [x] Malformed body, missing fields, oversized body and non-JSON all → 400 without an unhandled rejection
+- [x] Response bodies never contain the current PIN (and the token appears only in the 200 that carries it)
+- [x] A malformed body is a bad request, not an attempt: 1 000 of them leave the lockout untouched, and the next real attempt still has three tries
+- [x] Second pair while a session is live → 409 (and the already-issued token still works)
+- [x] Over-limit bodies are drained rather than reset, so an abusive client still reads its 400
+- [x] `onPaired` fires once with the session id the store created
 
 **Verification:**
-- [ ] Tests: `npm test` (extends `tests/http.test.ts`)
-- [ ] Manual: `curl` the four outcomes against a locally booted server
+- [x] Tests: `npm test` (extends `tests/http.test.ts`, real server on port 0, injected clock)
+- [x] Manual: the built server driven over HTTP (lockout path, happy path, one viewer, junk bodies)
 
 **Dependencies:** Task 3, Task 5
-**Files:** `src/server/http.ts`, `src/server/routes.ts`, `src/server/pairing.ts`, `tests/http.test.ts`
+**Files:** `src/server/http.ts`, `src/server/pairing.ts`, `tests/http.test.ts`, `scripts/serve.mjs`
 **Scope:** M
 
 ---

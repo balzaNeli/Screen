@@ -61,7 +61,7 @@ Tasks are recorded in full in `tasks/todo.md` (index below mirrors it).
 
 ### Phase 2 — Pairing and signaling
 - [x] Task 5: Pairing store (PIN TTL, rotation, 3-strike lockout, single-use tokens) + unit tests
-- [ ] Task 6: `POST /api/pair` + integration tests
+- [x] Task 6: `POST /api/pair` + integration tests
 - [ ] Task 7: WebSocket signaling relay with token/origin validation + two-peer integration tests
 
 ### Checkpoint 2 — Protocol proven headlessly

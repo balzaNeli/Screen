@@ -1,8 +1,15 @@
 import { readFile } from "node:fs/promises";
-import { createServer, type Server, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { createPairing, type Pairing } from "./pairing.ts";
 
 // Same depth from src/server/ and dist/server/, so this works before and after a build.
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -37,11 +44,15 @@ export type ServerOptions = {
   host?: string;
   webRoot?: string;
   docsRoot?: string;
+  /** The host window owns the store (it is the only thing allowed to see the PIN). */
+  pairing?: Pairing;
 };
 
 export type RunningServer = {
   port: number;
   close: () => Promise<void>;
+  /** Fires when a viewer has spent a valid PIN, before its socket connects. */
+  onPaired: (listener: (sessionId: string) => void) => void;
 };
 
 function headers(contentType: string): Record<string, string> {
@@ -57,6 +68,72 @@ function headers(contentType: string): Record<string, string> {
 function send(res: ServerResponse, status: number, contentType: string, body: string | Buffer): void {
   res.writeHead(status, headers(contentType));
   res.end(body);
+}
+
+function sendJson(res: ServerResponse, status: number, value: unknown): void {
+  send(res, status, "application/json; charset=utf-8", JSON.stringify(value));
+}
+
+/** A pair request is a PIN and nothing else; 4 KB is already generous. */
+const MAX_BODY_BYTES = 4096;
+
+/**
+ * Reads a small JSON body. Returns null for anything oversized, empty or unparseable, and keeps
+ * draining an oversized body so the client still receives its 400 instead of a connection reset.
+ */
+async function readJson(req: IncomingMessage, limit: number): Promise<unknown> {
+  if (Number(req.headers["content-length"] ?? 0) > limit) return null;
+  const chunks: Buffer[] = [];
+  let size = 0;
+  let tooBig = false;
+  for await (const chunk of req) {
+    const buf = chunk as Buffer;
+    size += buf.length;
+    if (size > limit) {
+      tooBig = true;
+      chunks.length = 0;
+      continue;
+    }
+    chunks.push(buf);
+  }
+  if (tooBig) return null;
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+/** The only field a pair request may carry. Anything else is a malformed request, not an attempt. */
+function pinFrom(body: unknown): string | null {
+  if (typeof body !== "object" || body === null) return null;
+  const pin = (body as { pin?: unknown }).pin;
+  return typeof pin === "string" ? pin : null;
+}
+
+async function handlePair(
+  req: IncomingMessage,
+  res: ServerResponse,
+  pairing: Pairing,
+  paired: (sessionId: string) => void,
+): Promise<void> {
+  const pin = pinFrom(await readJson(req, MAX_BODY_BYTES));
+  if (pin === null) return sendJson(res, 400, { error: "bad_request" });
+
+  const result = pairing.verify(pin);
+  switch (result.kind) {
+    case "paired":
+      paired(result.sessionId);
+      return sendJson(res, 200, { token: result.token });
+    case "invalid_pin":
+      return sendJson(res, 401, { error: "invalid_pin", attemptsLeft: result.attemptsLeft });
+    case "expired":
+      return sendJson(res, 401, { error: "expired" });
+    case "locked":
+      return sendJson(res, 429, { error: "locked", retryAfterMs: result.retryAfterMs });
+    case "busy":
+      return sendJson(res, 409, { error: "busy" });
+  }
 }
 
 /**
@@ -89,12 +166,23 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
   const webRoot = path.resolve(options.webRoot ?? path.join(repoRoot, "dist"));
   const docsRoot = path.resolve(options.docsRoot ?? path.join(repoRoot, "docs"));
   const host = options.host ?? "0.0.0.0";
+  const pairing = options.pairing ?? createPairing();
+
+  const pairedListeners = new Set<(sessionId: string) => void>();
+  const emitPaired = (sessionId: string): void => {
+    for (const listener of pairedListeners) listener(sessionId);
+  };
 
   const server: Server = createServer((req, res) => {
     void (async () => {
       const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
       const route = url.pathname;
 
+      if (route === "/api/pair") {
+        if (req.method !== "POST") return send(res, 405, "text/plain", "method not allowed");
+        await handlePair(req, res, pairing, emitPaired);
+        return;
+      }
       if (req.method !== "GET") {
         return send(res, 405, "text/plain", "method not allowed");
       }
@@ -115,9 +203,13 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
         return sendFile(res, path.join(docsRoot, probe), "probe page missing");
       }
       if (route === "/api/info") {
-        // shortcut: pairing state is wired in Task 6; until then the server claims it is open.
-        const info = { name, version, pairingOpen: true, lockedUntilMs: 0 };
-        return send(res, 200, "application/json; charset=utf-8", JSON.stringify(info));
+        const state = pairing.status();
+        return sendJson(res, 200, {
+          name,
+          version,
+          pairingOpen: state.viewer === null,
+          lockedUntilMs: state.lockedUntilMs,
+        });
       }
       send(res, 404, "text/plain", "not found");
     })().catch(() => send(res, 500, "text/plain", "internal error"));
@@ -137,6 +229,9 @@ export async function startServer(options: ServerOptions = {}): Promise<RunningS
         server.closeAllConnections();
         server.close((err) => (err ? reject(err) : resolve()));
       }),
+    onPaired: (listener) => {
+      pairedListeners.add(listener);
+    },
   };
 }
 
