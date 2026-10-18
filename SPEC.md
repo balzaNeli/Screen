@@ -1,7 +1,6 @@
 # SPEC: screenmirror — local Wi-Fi screen sharing (Deskreen alternative)
 
-Status: **APPROVED, transport decision pending** (rev 4: Silk reported to lack WebRTC → viewer
-browser/transport decided by evidence at Checkpoint 1)
+Status: **APPROVED, transport decided** (rev 5: probe evidence → Branch A, WebRTC in Silk)
 Phase: 1 of 4 (spec → plan → build → review/constraints)
 Capability count: 1 (LAN screen + system audio mirroring). No capability map needed.
 
@@ -13,12 +12,12 @@ Mirror the host computer's screen (or one window) **and its system audio** to a 
 same Wi-Fi, in a browser. No account, no cloud, no app install on the viewer, no traffic off
 the LAN.
 
-**Primary viewer target: Amazon Fire TV, controlled by the D-pad remote.**
-The browser on it is an open decision — Silk is reported not to support WebRTC — so the media
-transport has two branches, chosen by evidence from `/probe` at Checkpoint 1 (see *Transport
-decision* below). Secondary targets: phone/tablet (Safari, Chrome). Every viewer decision below
-is made for the Fire TV first — keyboard-less, touch-less, camera-less, weak SoC — and must not
-break the others. Pairing, PIN, QR, server, IPC, security and the 10-foot UI are identical in
+**Primary viewer target: Amazon Fire TV, Silk browser, D-pad remote.** Measured on a real
+`AFTCA002` (Silk 144): `RTCPeerConnection` is present, `navigator.mediaDevices` is not (no
+camera or microphone on a TV), and H.264 is offered. So the viewer is WebRTC **receive-only** —
+it never requests a device and never feature-detects `navigator.mediaDevices`. Secondary
+targets: phone/tablet (Safari, Chrome). Every viewer decision is made for the Fire TV first —
+keyboard-less, touch-less, camera-less, weak SoC — and must not break the others. Pairing, PIN, QR, server, IPC, security and the 10-foot UI are identical in
 both branches; only the media plumbing forks.
 
 **Host user story:** I open the app, it shows a URL, a QR code and a 6-digit PIN, I pick a screen
@@ -69,39 +68,30 @@ auditable, LAN-only version built for a TV.
 17. `npm test` and `npm run lint` pass with zero warnings; `src/server/pairing.ts`,
     `src/shared/protocol.ts`, `src/shared/audio.ts` and `src/shared/codecs.ts` line coverage ≥ 90%.
 
-### Transport decision: two branches, decided by evidence
+### Transport: WebRTC (decided by probe, 2026-10-18)
 
-Silk is reported not to expose `RTCPeerConnection` at all (also consistent with reports of Silk
-being rejected as "browser too old" by WebRTC apps). That is a device fact worth 20 minutes, not
-an argument: `/probe` answers it at Checkpoint 1, alongside the Branch B questions, in one trip
-to the TV.
+A real `AFTCA002` running Silk 144 was probed with `/probe`. Results in
+`docs/manual-tests.md`:
 
-- **Branch A — install a Chromium browser on the Fire TV and keep WebRTC.** TV Bro (open source,
-  D-pad-first, Android WebView) is the candidate; Fire OS is Android and accepts a sideload. All
-  17 criteria above stand unchanged, latency target 250 ms. Risk: the Fire OS WebView may also
-  withhold WebRTC, in which case Branch B is the fallback.
-- **Branch B — keep Silk, change the transport.** Host records the captured stream with
-  `MediaRecorder`, streams chunks over the existing WebSocket, viewer plays them with
-  `MediaSource`. Audio travels in the same container, so it is one path, not two.
+- `RTCPeerConnection`, `MediaSource`, `MediaRecorder`, `setCodecPreferences`,
+  `requestVideoFrameCallback`: **all present**. `navigator.mediaDevices`: **absent**.
+- Offered video codecs: VP8, **H264**, AV1, VP9. Only `video/H264` matches `preferH264`.
+- No H.264 container is *recordable* (`MediaSource=yes`, `MediaRecorder=no` for every `avc1`
+  type), so the alternative transport could only ever have sent CPU-decoded VP8/VP9.
 
-**Branch B deltas to the criteria above** (everything not listed is unchanged):
-- Criterion 3: latency becomes **≤ 1.5 s** glass-to-glass, and the frame is stable rather than
-  instant. This is the real price of Branch B and it must be stated in the README, not hidden.
-- Criterion 5: the codec check moves from the SDP to the recording mime type — `video/mp4` with
-  `avc1` is preferred (hardware decode), `video/webm` with `vp8,opus` is the fallback — verified
-  from the same `?debug=1` overlay, which now reports `MediaSource.isTypeSupported` results,
-  buffer health and dropped frames.
-- Criteria 7/8 (audio, mute): unchanged in behaviour, but the host audio toggle now selects
-  whether the recorder captures an audio track, and mute is `video.muted` in the viewer.
-- Criterion 15 (Stop): unchanged, plus the viewer must clear its `SourceBuffer` and close the
-  socket rather than leaving a stalled `<video>`.
-- Structure: `src/server/ws.ts` relays binary chunk frames as well as JSON signals — still
-  **relays, never parses**.
+**Decision: WebRTC in Silk. No browser install, no sideload.** The 17 criteria stand unchanged.
 
-**Decision rule at Checkpoint 1:** if `RTCPeerConnection` is present in any browser installable
-on the Fire TV, take Branch A (ten times lower latency). Take Branch B only if no installable
-browser has WebRTC. Record the device, the browser and the probe numbers in
-`docs/manual-tests.md`; the choice is data, not preference.
+**Requirement that fell out of the probe: the viewer is receive-only.** It must never call
+`getUserMedia`/`getDisplayMedia`, never ask for a permission, and never feature-detect on
+`navigator.mediaDevices`. Sites that do report "Silk has no WebRTC at all" — the peer connection
+is there, the media *device* object is not, because a TV has no camera or microphone. This is
+the single most important constraint on the viewer code.
+
+**Rejected: MSE + WebSocket chunk streaming (was "Branch B").** The probe's loopback test froze
+the Fire TV hard enough to need a power cycle. The MSE path has no flow control — a slow decoder
+turns into an unbounded buffer — and this device cannot record H.264, so the fallback would have
+been software VP8 decode at 1080p. Recorded here so it is not re-proposed: the probe page keeps
+a capped, double-confirmed version of that test as check 6.
 
 ### Non-goals (v1, explicitly cut)
 
@@ -266,11 +256,6 @@ SDP string surgery — the server still never parses SDP. Why: Chrome defaults t
 VP8/VP9 as fallback (nothing is filtered out, only reordered). Verified on the real device via
 the viewer's `?debug=1` overlay reporting the negotiated codec from `pc.getStats()`.
 
-Branch B equivalent, same idea and tested the same way: `pickMimeType(candidates)` chooses the
-first supported recording type — `video/mp4;codecs="avc1.4d401f,mp4a.40.2"` (hardware decode,
-one muxed stream) before `video/webm;codecs="vp8,opus"`. Same preference logic, same unit test,
-different API surface.
-
 Host-side Chromium switches (set in `main` before `app.whenReady`):
 
 ```ts
@@ -283,27 +268,23 @@ so exposing the real host candidate costs no privacy and removes a whole failure
 *Unverified until Slice 1*: if the switch is a no-op on the target Electron/Chromium, revert it
 and keep the mDNS troubleshooting entry in the README instead.
 
-### Fire TV probe — the gate that decides everything (Branch A vs B)
+### Fire TV probe (gate passed, kept as a regression tool)
 
-`docs/silk-probe.html`: one self-contained page (no deps, no build step) served by the host
-server at `/probe`, reporting in one trip to the TV:
+`docs/silk-probe.html` + `/probe.js` + `/probe.css`: one page, no deps, no build step, served by
+the host server at `/probe`. Checkpoint 1 is done; the page stays because a second Fire TV model
+in the house, a Silk update or a friend's device will ask the same questions again.
 
-| # | Check | Decides |
+| # | Check | Why it stays |
 |---|---|---|
-| 1 | `typeof RTCPeerConnection`, `navigator.mediaDevices` presence | Branch A vs B |
-| 2 | `RTCRtpSender.getCapabilities("video").codecs` (full list, if 1 is true) | which codec to prefer on A |
-| 3 | `MediaSource.isTypeSupported` for `video/webm;codecs="vp8,opus"` and `video/mp4;codecs="avc1.4d401f,mp4a.40.2"`; `MediaRecorder.isTypeSupported` for the same | Branch B viability and container choice |
-| 4 | **End-to-end MSE loopback in the page**: `MediaRecorder` on a canvas stream → chunks appended to a `MediaSource` → rendered by `<video>`; reports time-to-first-frame, buffer health and dropped frames | Branch B viability without needing a host at all |
-| 5 | Rendered fps and dropped frames after 30 s (whichever pipeline exists) | whether the stick holds 1080p30 |
+| 1 | Capabilities: `RTCPeerConnection`, `navigator.mediaDevices`, `MediaSource`, `MediaRecorder`, `setCodecPreferences`, rVFC | the Branch A/B question, in ten seconds |
+| 2 | Codec list from `RTCRtpSender/Receiver.getCapabilities` | whether H.264 is offered at all |
+| 3 | `MediaSource`/`MediaRecorder` support per container | why H.264 recording was never an option here |
+| 4 | WebRTC loopback: 640x360@15 for 30 s, H.264 preferred, connection state, negotiated codec, painted frames | the one measurement still missing for this device |
+| 4b | Same at 720p30, on demand | deliberate escalation, never the default |
+| 6 | MSE loopback, capped and double-confirmed | kept only as evidence against the rejected transport |
 
-Plus `navigator.userAgent`, screen size, and Silk's rendering mode if detectable — as a reminder
-to try "Off (faster on this device)" when accelerated mode misbehaves. Every result is printed
-as plain text large enough to read from a sofa, and each check is individually triggered by an
-Enter-activatable button so a partial failure still yields partial answers.
-
-Rule: run this on the actual Fire TV **before** any viewer UI work, fill `docs/manual-tests.md`,
-and pick the branch by the rule above. If Branch B is chosen, cherry-picking A's architecture is
-still possible later — the server, pairing and UI do not change.
+Safety rules, learned by freezing a Fire TV: check 6 asks for a second confirming click, caps its
+append queue at 24 buffers and stops itself after 20 s; check 4 self-stops after 30 s.
 
 ### System audio
 
@@ -370,7 +351,7 @@ Explicitly accepted risks, with mitigation:
 |---|---|---|
 | Unit | `node:test` | `pairing.ts` (PIN shape, TTL, single-use, lockout, rotation, concurrent pair), `protocol.ts` (guards reject garbage/foreign types), `audio.ts` (`audioModeFor` → `loopback` on win32, `null` on darwin/linux), `codecs.ts` (H.264 first, stable order, nothing filtered), `RTC_CONFIG` has no `iceServers` |
 | Integration | `node:test`, server on port 0 | static allowlist + path traversal blocked; wrong PIN 401; 3 failures 429; valid pair → WS connect; replayed token → 1008; foreign `Origin` → 1008; signal relay host↔viewer; `stop` propagates; second viewer while busy → 409; `/probe` served and dependency-free |
-| Manual (logged in `docs/manual-tests.md`) | **Actual Fire TV** | probe results for all five checks (WebRTC present? codec list? MSE/MediaRecorder types? MSE loopback time-to-first-frame? fps after 30 s) → branch decision; then: remote-only pairing; Enter-on-6th-digit submit; no on-screen keyboard; fullscreen and overscan; mute; host audio toggle mid-session; video latency (≤250 ms on A, ≤1.5 s on B); first frame ≤ 3 s; Wi-Fi drop/reconnect; Silk accelerated vs Off |
+| Manual (logged in `docs/manual-tests.md`) | **Actual Fire TV** | probe re-runs on other models/after Silk updates; WebRTC loopback and 720p30 escalation; remote-only pairing; Enter-on-6th-digit submit; no on-screen keyboard; fullscreen and overscan; mute; host audio toggle mid-session; video latency ≤250 ms; first frame ≤ 3 s; Wi-Fi drop/reconnect |
 | Manual | Phone/tablet | QR scan → prefilled PIN → connect; PIN absent from the address bar afterwards; iOS autoplay tap path |
 
 Test files: `tests/*.test.ts`, importing source with `.ts` specifiers. No browser automation:
@@ -414,10 +395,9 @@ build with an unhandled `uncaughtException`; remove the VP8 fallback from the co
   detects this at runtime, states it, and runs video-only.
 - **Loopback is the whole system mix**, not per-application. Sharing one window still sends all
   sound, including notifications. UI wording must not promise otherwise.
-- **Silk is reported to have no WebRTC at all.** Branch A therefore requires installing a
-  D-pad-friendly Chromium browser on the Fire TV (one-time, documented); Branch B keeps Silk and
-  accepts ~1.5 s latency instead of 250 ms. Either way the README states which branch this build
-  implements and why.
+- **Silk hides `navigator.mediaDevices`** (no camera or microphone on a TV) even though
+  `RTCPeerConnection` works. The viewer is receive-only by design, so this is fine — but any
+  future feature that captures from the viewer's device (voice, screenshots) will not work here.
 - **Silk accelerated rendering** may break other web-platform features on some Fire TV models;
   the documented workaround is switching Silk's rendering mode off.
 - Fire TV URLs must be typed once with the remote; the README documents bookmarking the URL.
@@ -429,13 +409,14 @@ build with an unhandled `uncaughtException`; remove the VP8 fallback from the co
 
 ---
 
-## Decisions recorded (rev 4)
+## Decisions recorded (rev 5)
 
 QR code: **in** (phones/tablets; not usable from a Fire TV remote). Name: **screenmirror**.
-Viewer: **React**, TV-first. Viewers: **1**. Audio: **on by default**, host toggle + viewer mute.
-Primary viewer: **Fire TV**, D-pad only, no camera, no keyboard. Default quality: 1080p.
-Microphone: out of scope (system audio only) — reverse by changing the "Ask first" line.
-**Transport: pending the probe** — Branch A (install a WebRTC-capable Chromium browser on the TV,
-keep WebRTC, 250 ms) versus Branch B (keep Silk, MSE + WebSocket chunks, ~1.5 s). Decision rule,
-probe checks and Branch B deltas are specified above. Unknown until Checkpoint 1: whether
-`RTCPeerConnection` exists in Silk or in any browser installable on the Fire TV.
+Viewer: **React**, TV-first, **receive-only**. Viewers: **1**. Audio: **on by default**, host
+toggle + viewer mute. Primary viewer: **Fire TV / Silk**, D-pad only, no camera, no keyboard.
+Default quality: 1080p. Microphone: out of scope (system audio only).
+**Transport: WebRTC in Silk — decided 2026-10-18 by probe evidence** (`AFTCA002`, Silk 144:
+`RTCPeerConnection` yes, `navigator.mediaDevices` no, H.264 offered, H.264 recording impossible).
+MSE + WebSocket chunk streaming is rejected and recorded in the transport section above.
+Still unverified: that a real Fire TV peer connection *connects and paints* — probe check 4
+(capped, safe) or Checkpoint 3 will say.

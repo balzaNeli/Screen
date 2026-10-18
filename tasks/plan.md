@@ -9,7 +9,7 @@ same server. 14 tasks across 4 phases, with 4 verification checkpoints. The Fire
 device we cannot test from here, so the plan puts a probe on real hardware before any viewer UI
 exists.
 
-Source of truth for behaviour: `SPEC.md` (rev 3, approved).
+Source of truth for behaviour: `SPEC.md` (rev 5, approved — transport decided by probe evidence).
 
 ## Architecture decisions
 
@@ -21,9 +21,10 @@ Source of truth for behaviour: `SPEC.md` (rev 3, approved).
 2. **Server first, Electron later.** Pairing, static serving and signaling are the risky logic
    and all of it is testable headlessly with `node:test`. Electron is a shell added in Task 8,
    and by then the protocol is already proven.
-3. **`/probe` is a gate, not a nicety.** Task 4 runs on the real Fire TV, reports whether Silk
-   does WebRTC and which codec it decodes, and Checkpoint 1 blocks the rest of the plan on that
-   answer. If it fails, the transport changes (MJPEG, no audio) and that is a spec change.
+3. **`/probe` was a gate, and it is now a regression tool.** Task 4 ran on the real Fire TV and
+   answered the transport question before any viewer UI existed (see Checkpoint 1). The page
+   stays because a second Fire TV model, a Silk update or a friend's device will ask the same
+   questions again.
 4. **Renderer owns the peer connection; main owns capture + server + IPC.** One message envelope
    (`Signal`) is used on the wire and over IPC, so no translation layer can drift.
 5. **Pure logic lives in `src/shared/`** (protocol guards, `audioModeFor`, `preferH264`, pairing
@@ -39,19 +40,22 @@ Source of truth for behaviour: `SPEC.md` (rev 3, approved).
 Tasks are recorded in full in `tasks/todo.md` (index below mirrors it).
 
 ### Phase 1 — Skeleton and fail-fast gate
-- [ ] Task 1: Repo scaffold (build, lint, test wiring)
-- [ ] Task 2: `src/shared` protocol, audio and codec modules + unit tests
-- [ ] Task 3: Static HTTP server with path allowlist, `/api/info`, `/probe`
-- [ ] Task 4: `docs/silk-probe.html` + manual test log skeleton
+- [x] Task 1: Repo scaffold (build, lint, test wiring)
+- [x] Task 2: `src/shared` protocol, audio and codec modules + unit tests
+- [x] Task 3: Static HTTP server with path allowlist, `/api/info`, `/probe`
+- [x] Task 4: probe page + manual test log (check 6 capped and double-confirmed after it froze a TV)
 
-### Checkpoint 1 — Fire TV gate (blocking)
-- [ ] `/probe` runs on the real Fire TV; all five checks (WebRTC present, codec list, MSE and
-      MediaRecorder types, MSE loopback time-to-first-frame, fps after 30 s) are recorded in
-      `docs/manual-tests.md`
-- [ ] Branch A or Branch B chosen by the rule in `SPEC.md` (A if any installable browser has
-      `RTCPeerConnection`)
-- [ ] `npm run lint && npm test && npm run build` green
-- [ ] Review with human before Phase 2 (if neither branch is viable, stop and revise `SPEC.md`)
+### Checkpoint 1 — Fire TV gate (PASSED 2026-10-18)
+- [x] `/probe` run on a real `AFTCA002` (Silk 144); results and safety rules in `docs/manual-tests.md`
+- [x] **Branch A chosen**: `RTCPeerConnection` is present in Silk itself — no browser install, no
+      sideload. Branch B was rejected on evidence (no recordable H.264 container; the MSE loopback
+      test froze the device hard)
+- [x] Requirement derived from the probe: **the viewer is receive-only** and never touches
+      `navigator.mediaDevices`, which Silk hides
+- [x] `npm run lint && npm test && npm run build` green
+- [x] Review with human
+- [ ] Probe check 4 (capped WebRTC loopback, 640x360@15 → 720p30) run on the TV: the one remaining
+      unknown before Checkpoint 3. Not blocking Phase 2
 
 ### Phase 2 — Pairing and signaling
 - [ ] Task 5: Pairing store (PIN TTL, rotation, 3-strike lockout, single-use tokens) + unit tests
@@ -93,9 +97,10 @@ split work across sessions.
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Silk has no WebRTC (reported) and no installable browser on the Fire TV has it either | High | Already realised for Silk; both branches specified with their own probe checks in Task 4; Checkpoint 1 decides on evidence. Branch B (MSE + WS) still needs MSE, which is what Silk is built for |
-| Branch B's MSE live edge drifts or stalls | Med | Live-edge trimming kept to the simplest working rule; buffer health exposed in `?debug=1`; Branch B is only taken if A is impossible |
-| A Fire TV Stick cannot sustain 1080p30 on either branch | Med | Probe check 5 measures it before UI work; quality selector defaults to 1080p and can drop to 720p |
+| **Silk has no WebRTC** (the claim repeated all over the web) | Was High | **Answered by the probe, 2026-10-18**: Silk 144 has `RTCPeerConnection`. What it hides is `navigator.mediaDevices` — a TV has no camera or microphone — which is what sites really mean when they report "no WebRTC". The viewer is receive-only, so it never needs that object |
+| **A real Fire TV peer connection connects on paper but not in practice** (ICE/DTLS under Silk, accelerated rendering) | High | Probe check 4 (capped loopback, self-stopping) measures connect + first painted frame + negotiated codec + fps before Checkpoint 3. From this machine it cannot be verified — probe check 4 is the cheapest possible answer |
+| MSE chunk streaming as a fallback transport | — | **Rejected**: the loopback test froze the Fire TV hard (needed a power cycle) and this device cannot record an H.264 container. `SPEC.md` records the rejection; the probe keeps a capped, double-confirmed version of the test purely as evidence |
+| A Fire TV Stick cannot sustain 1080p30 | Med | Probe check 4 reports fps at 640x360@15, then at 720p30 on request, before any UI work; the quality selector defaults to 1080p and can drop to 720p; H.264 hardware decode is the main mitigation |
 | `audio: 'loopback'` produces silence on this Windows build | Med | Task 9 checks the track exists with sane `getSettings()`; real audibility at Checkpoint 3; degrade path to video-only is already specified |
 | The mDNS Chromium switch is a no-op or renamed | Med | Treated as unverified until Task 7/9; README keeps mDNS troubleshooting; revert is one line |
 | Node type stripping + `rewriteRelativeImportExtensions` fights the Electron/tsc build | Med | Tasks 1–2 prove the route before any real code; documented fallback to compiled tests |
@@ -106,5 +111,5 @@ split work across sessions.
 
 ## Open questions
 
-None blocking. Two data points to capture during Checkpoint 1: the exact Fire TV model and
-whether Silk is in accelerated or on-device rendering mode.
+None blocking. Checkpoint 1 answered both data points: device `AFTCA002`, Silk 144, and the
+rendering mode still worth recording in `docs/manual-tests.md` when it is next noticed.

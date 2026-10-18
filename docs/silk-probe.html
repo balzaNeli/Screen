@@ -9,16 +9,19 @@
   <body>
     <h1>screenmirror probe</h1>
     <p class="hint">
-      Run every check with the remote. Results stay on screen — photograph them, then write them
-      into <b>docs/manual-tests.md</b>. Click 4 to watch a 30 s loopback stream.
+      Press <b>Run all</b>: checks 1–4 are safe. Check 6 (MSE) hung an AFTCA002 hard on
+      2026-10-18 — it asks for a second confirmation before it runs. Photograph the results and
+      write them into <b>docs/manual-tests.md</b>.
     </p>
 
     <div class="ops">
-      <button id="run-all" autofocus>Run all</button>
+      <button id="run-all" autofocus>Run all (1–4)</button>
       <button data-run="env">1 · Environment</button>
       <button data-run="caps">2 · Codec capabilities</button>
       <button data-run="types">3 · MSE / MediaRecorder types</button>
-      <button data-run="loop">4 · MSE loopback (30 s)</button>
+      <button data-run="webrtc">4 · WebRTC loopback (safe, 30 s)</button>
+      <button id="boost">4b · Retry at 720p30</button>
+      <button data-run="mse">6 · MSE loopback (may hang the TV)</button>
       <button id="sound">Sound on/off</button>
       <button id="stop">Stop</button>
     </div>

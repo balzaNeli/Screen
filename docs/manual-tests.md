@@ -4,46 +4,48 @@ Automated tests cover the server, the protocol guards and the pairing store. Eve
 depends on a real screen, a real Wi-Fi link and a real TV is logged here, because that is where
 this project actually fails.
 
-## How to run the probe
+## Checkpoint 1 — Fire TV probe results (2026-10-18, DONE)
 
-1. Start the host: `npm run dev` (or `npm start` after `npm run build`).
-2. Read the LAN URL from the host window (e.g. `http://192.168.1.23:4680`).
-3. On the Fire TV, open `<url>/probe` and press **Run all** with the remote.
-4. Photograph the screen and fill in the table below.
-5. Decide the branch with the rule underneath, then say it out loud in the commit message.
+Device: `AFTCA002` (Silk 144.12.355919, Chromium 144.0.7559.246, reported as Android 7.1.2).
+TV rendering mode at the time of the run: _fill in if you remember it_.
 
-## Fire TV probe results
-
-| Field | Value |
+| Check | Result |
 |---|---|
-| Fire TV model | _fill in_ |
-| Fire OS version | _fill in_ |
-| Browser (from the `ua:` line) | _fill in_ |
-| Silk rendering mode (Settings → Silk → Accelerated/Off) | _fill in_ |
-| 1 · `RTCPeerConnection` present | _yes / no_ |
-| 2 · H.264 variants reported | _list / none_ |
-| 3 · Best recordable+playable container | _type / none_ |
-| 4 · MSE loopback rendered | _yes / no_ |
-| 4 · Time to first painted frame | _ms_ |
-| 4 · Container actually used | _type_ |
-| 5 · Painted fps after 30 s | _fps_ |
-| 5 · Dropped frames | _n_ |
-| 5 · Approximate pipeline delay | _s_ |
-| 5 · Audio track present + hum audible | _yes / no_ |
-| Notes / error text on screen | _fill in_ |
+| 1 · `RTCPeerConnection` | **yes** |
+| 1 · `navigator.mediaDevices` | **no** — no camera/mic on a TV, so Silk hides the whole object |
+| 1 · `MediaSource` / `MediaRecorder` | yes / yes |
+| 1 · `setCodecPreferences` / `requestVideoFrameCallback` | yes / yes |
+| 1 · screen | 1920x1080 @1x |
+| 2 · codecs | VP8, rtx, **H264**, AV1, VP9, red, ulpfec, H265, flexfec-03 |
+| 3 · recordable + playable container | only `video/webm;codecs="vp8,opus"` and `vp9,opus` |
+| 3 · H.264 recording | **impossible**: `MediaSource=yes` but `MediaRecorder=no` for every `avc1`/`mp4` type |
+| 4 · MSE loopback (old check) | **hung the Fire TV hard** — needed a power cycle |
 
-### Decision rule
+### Decision: Branch A (WebRTC)
 
-- `RTCPeerConnection` = **yes** in any browser installable on this TV → **Branch A** (WebRTC,
-  250 ms target). Record which browser and how it was installed.
-- `RTCPeerConnection` = **no** and check 4 renders → **Branch B** (MSE + WebSocket, ~1.5 s).
-- Both **no** → stop. The spec's transport section needs revisiting before more code is written.
+The decision rule fired on check 1: `RTCPeerConnection` is present **in Silk itself**, so no
+browser install is needed. Branch B is dead on evidence, not on preference:
 
-## Checkpoint 1 — worked? (fill after the probe)
+- no H.264 container can be recorded, so Branch B could only ever send CPU-decoded VP8/VP9 —
+  exactly the workload that froze the device during the MSE loopback test;
+- the MSE path has no flow control; a slow decoder turns into an unbounded buffer.
 
-- [ ] Probe reachable at `<url>/probe` and every button worked with the remote alone
-- [ ] Branch decided: **A** / **B**
-- [ ] `npm run verify` green on this commit
+**Consequences that are now requirements:**
+
+1. **The viewer is receive-only.** It must never call `getUserMedia`/`getDisplayMedia`, never
+   request a permission, and never feature-detect on `navigator.mediaDevices`. Sites that do
+   report "Silk has no WebRTC" — the capability is there, the media *device* object is not.
+2. H.264 stays first in the codec preference: H264 is offered, and hardware decode is the
+   difference between 1080p30 and a slideshow on this stick.
+3. `preferH264` must not filter VP8/VP9 out — Silk's H.264 hardware path is per-codec, and a
+   failed H.264 negotiation must still fall back.
+
+### Still unverified (Checkpoint 3)
+
+Check 4 only proved that a loopback peer connection is *constructible*; the new safe check
+(`Run all`, check 4: 640x360@15 for 30 s, then "Retry at 720p30") measures whether it actually
+connects and paints on this device. Run it when convenient — it is capped and self-stopping, and
+it does not need the host. Until then, real end-to-end behaviour is unknown.
 
 ## Checkpoint 3 — end-to-end acceptance (Fire TV)
 
@@ -51,9 +53,9 @@ this project actually fails.
 |---|---|---|
 | 1 | Host window shows every LAN URL and a 6-digit PIN | |
 | 2 | Viewer starts within 3 s of submitting a valid PIN | |
-| 3 | Glass-to-glass latency (A: ≤250 ms · B: ≤1.5 s) | |
+| 3 | Glass-to-glass latency ≤ 250 ms | |
 | 4 | Pairing completable with the remote alone, no on-screen keyboard | |
-| 5 | Codec in `?debug=1`: H.264 (A) or MP4/AVC container (B) | |
+| 5 | Codec in `?debug=1` is H.264 | |
 | 6 | 1080p30 holds, dropped frames flat over 2 min | |
 | 7 | Fullscreen fills the panel, host screen edges not cropped | |
 | 8 | Audio audible and in sync (click a window, hear the click) | |
@@ -73,3 +75,11 @@ this project actually fails.
 | 2 | PIN is prefilled and absent from the address bar afterwards | |
 | 3 | Sound plays after one button press at most (iOS autoplay policy) | |
 | 4 | Mute and fullscreen work on a touch device | |
+
+## Probe safety rules (added after the freeze)
+
+- Check 6 (MSE) requires a second confirming click, runs at 640x360@15, caps its append queue at
+  24 buffers and stops itself after 20 s. It is a diagnostic, and a diagnostic that bricks the
+  device is worse than no diagnostic.
+- The WebRTC check defaults to 640x360@15 and stops itself after 30 s. "Retry at 720p30" is an
+  explicit, deliberate escalation.

@@ -1,6 +1,9 @@
 # Task List: screenmirror
 
-Source of truth: `SPEC.md` (rev 3, approved) and `tasks/plan.md`.
+Source of truth: `SPEC.md` (rev 5, approved) and `tasks/plan.md`.
+
+**Progress:** Tasks 1–4 done. **Checkpoint 1 passed 2026-10-18 → transport is WebRTC in Silk
+(Branch A); the MSE alternative is rejected on evidence.** Next: Task 5.
 
 **Definition of Done — every task:**
 - [ ] `npm test` passes (no new skips, no deleted assertions)
@@ -95,24 +98,20 @@ port 0.
 ### Task 4: `docs/silk-probe.html` + manual test log skeleton
 
 **Description:** One self-contained diagnostic page (no build step, no dependencies, no CDN) that
-answers **all five branch-deciding checks** from the spec: (1) is `RTCPeerConnection` there at
-all; (2) the full `RTCRtpSender.getCapabilities("video").codecs` list; (3)
-`MediaSource.isTypeSupported` / `MediaRecorder.isTypeSupported` for `video/webm;codecs="vp8,opus"`
-and `video/mp4;codecs="avc1.4d401f,mp4a.40.2"`; (4) an end-to-end MSE loopback in the page —
-`MediaRecorder` on a canvas stream, chunks appended to a `MediaSource`, rendered by `<video>`,
-reporting time-to-first-frame and buffer health; (5) rendered fps and dropped frames after 30 s.
-Also print `navigator.userAgent` and screen size. Create `docs/manual-tests.md` with the Fire TV
-table (model, browser, rendering mode, the five results, pairing steps, latency, audio) and the
-branch decision rule. Readability on a TV: large monospace text, high contrast, each check
-triggered by its own Enter-activatable button so a partial failure still yields partial answers.
+answers the branch question on real hardware. As built: check 1 capabilities, check 2 codec list,
+check 3 container support, check 4 **WebRTC loopback** (640x360@15, H.264 preferred, self-stops
+after 30 s, reports connection state, negotiated codec, painted frames), check 4b the same at
+720p30 on demand, check 6 the capped, double-confirmed MSE test kept only as evidence against the
+rejected transport. Results and safety rules in `docs/manual-tests.md`.
 
 **Acceptance criteria:**
-- [ ] Checks 1–3 print results without any user permission or device access
-- [ ] Check 4 completes a full record → append → render loop and prints time-to-first-frame, or prints the exact failing API and reason
-- [ ] Check 5 prints fps and dropped frames after 30 s of check 4 running
-- [ ] Every check is reachable and triggerable with the D-pad alone at `http://<lan-ip>:4680/probe`
-- [ ] No dependency, no build step, single file
-- [ ] `docs/manual-tests.md` contains the table, the five checks, and the Branch A/B decision rule
+- [x] Checks 1–3 print results without any user permission or device access
+- [x] Check 4 proves a peer connection on the device: connection state, negotiated codec, first painted frame, fps, and it stops itself
+- [x] Check 6 cannot brick a TV by accident: second confirming click, 640x360@15, append queue capped at 24, self-stop at 20 s
+- [x] Every check is reachable and triggerable with the D-pad alone at `http://<lan-ip>:4680/probe`
+- [x] No dependency, no build step (external css/js so the CSP can stay strict)
+- [x] `docs/manual-tests.md` holds the measured results, the branch decision and the safety rules
+- [ ] Check 4 run on the real Fire TV and its numbers written down (still open — Checkpoint 3 depends on it)
 
 **Verification:**
 - [ ] Manual (required): run `/probe` on the actual Fire TV and fill the table
@@ -125,13 +124,14 @@ triggered by its own Enter-activatable button so a partial failure still yields 
 
 ---
 
-## Checkpoint 1 — Fire TV gate (blocking)
+## Checkpoint 1 — Fire TV gate (PASSED 2026-10-18)
 
-- [ ] `/probe` results recorded in `docs/manual-tests.md`: WebRTC present? codec list? MSE/MediaRecorder types? MSE loopback time-to-first-frame? fps after 30 s?
-- [ ] **Branch decision made by the rule in `SPEC.md`**: Branch A if `RTCPeerConnection` exists in Silk or in any browser installable on the TV (4× lower latency); Branch B otherwise
-- [ ] If Branch A: install and name the browser on the TV; if Branch B: confirm MSE loopback played, since that is the whole transport
-- [ ] `npm run verify` green
-- [ ] Human review. If neither branch is viable (no WebRTC **and** no MSE), **stop** — revise `SPEC.md` before Phase 2
+- [x] `/probe` run on a real `AFTCA002` (Silk 144): `RTCPeerConnection` yes, `navigator.mediaDevices` no, MediaSource/MediaRecorder/setCodecPreferences/rVFC yes, screen 1920x1080@1x
+- [x] Codecs offered: VP8, H264, AV1, VP9, H265 + rtx/red/fec. Recording: no H.264 container on this device
+- [x] **Decision: WebRTC in Silk. No browser install needed.** The old MSE loopback test froze the device hard → that transport is rejected and the test is now capped and double-confirmed
+- [x] Consequence recorded as a requirement: **the viewer is receive-only** and must never touch `navigator.mediaDevices`
+- [x] `npm run verify` green
+- [ ] Probe check 4 (capped WebRTC loopback) run on the TV — confirms a real connection before Checkpoint 3; not blocked by this, the pair/invite work can proceed
 
 ---
 
@@ -254,10 +254,9 @@ and nothing else. Host UI stays on `file://`.
 
 ### Task 9: Host capture engine: `getDisplayMedia`, H.264 preference, quality/audio, peer wiring
 
-**Branch: A (WebRTC).** If Checkpoint 1 selects Branch B, replace the peer-connection plumbing
-with `MediaRecorder` on the captured stream, `pickMimeType` for the container, chunks sent over
-the same socket, and binary chunk relay in `src/server/ws.ts` (+1 integration test). Quality,
-audio toggle, teardown and IPC wiring stay exactly as described.
+**Branch A (WebRTC) — confirmed by Checkpoint 1 (probe evidence, Silk 144: `RTCPeerConnection`
+present, H.264 offered).** No fork: the MSE alternative is rejected in `SPEC.md` and the expected
+codec is H.264 rather than unknown. Everything else is as described.
 
 **Description:** `mirror.ts` in the renderer: request display media, attach the video track with
 `contentHint = "detail"`, apply the chosen quality cap via `applyConstraints`, create the
@@ -287,10 +286,11 @@ audio toggle, teardown and IPC wiring stay exactly as described.
 
 ### Task 10: Viewer app: D-pad PIN pad, `<video>`, overlay controls, `?debug=1` stats
 
-**Branch: A (WebRTC).** If Branch B is selected, the transport half changes to `MediaSource` +
-`SourceBuffer` append loop with live-edge trimming and buffer-health reporting, `video.muted` for
-mute, and socket close on stop. The PIN pad, pairing, controls, focus handling, safe-area sizing
-and `?debug=1` panel are identical in both branches — this is deliberately where the fork stops.
+**Branch A (WebRTC) — confirmed by Checkpoint 1.** One constraint from the probe, non-negotiable:
+the viewer is **receive-only**. It must never call `getUserMedia`/`getDisplayMedia`, never request
+a permission, and never feature-detect on `navigator.mediaDevices` — Silk on Fire TV hides that
+object (a TV has no camera or microphone) and a naive feature test is exactly what makes people
+report "Silk has no WebRTC". `RTCPeerConnection` on its own is all a recv-only viewer needs.
 
 **Description:** The viewer React app served at `/`: fetch `/api/info`, show a 10-button numeric
 pad (no `<input>` — this is deliberate, it summons Silk's on-screen keyboard), auto-submit on the
@@ -307,6 +307,7 @@ and audio level from `getStats()`. `?p=` prefills the PIN and is scrubbed with
 - [ ] Stream renders, mute toggles audio, fullscreen works, `?debug=1` reports the negotiated codec
 - [ ] Blurred focus is always visible (≥4 px outline) on every control
 - [ ] After load with `?p=`, the PIN is gone from the address bar and from `history.length` navigation
+- [ ] No viewer file references `getUserMedia`, `getDisplayMedia`, `navigator.mediaDevices` or any permission API (grep gate — receive-only on a camera-less device)
 
 **Verification:**
 - [ ] Tests: `npm test` (PIN-pad state machine and URL scrubbing as pure helpers)
@@ -420,7 +421,7 @@ entry) in `docs/manual-tests.md`.
 
 **Acceptance criteria:**
 - [ ] Coverage report shows ≥90% lines on the four pure modules
-- [ ] `npm run verify` fails if `iceServers:` appears non-empty anywhere in `src/` or `dist/`
+- [ ] `npm run verify` fails if `iceServers:` appears non-empty anywhere in `src/` or `dist/`, or if viewer code mentions `getUserMedia`, `getDisplayMedia` or `navigator.mediaDevices`
 - [ ] Every one of the 17 spec success criteria has a named evidence row, or is explicitly marked "not verified" with the reason
 - [ ] No skipped tests, no suppressed lint errors
 - [ ] Working tree committed in logical chunks with messages that reference the spec sections
