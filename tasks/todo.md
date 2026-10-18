@@ -1,0 +1,443 @@
+# Task List: screenmirror
+
+Source of truth: `SPEC.md` (rev 3, approved) and `tasks/plan.md`.
+
+**Definition of Done — every task:**
+- [ ] `npm test` passes (no new skips, no deleted assertions)
+- [ ] `npm run lint` clean, zero warnings, no `@ts-ignore`/`eslint-disable` added
+- [ ] `npm run build` succeeds
+- [ ] Acceptance criteria below checked off
+- [ ] Files touched stay within the list given (flag it if not)
+
+---
+
+## Phase 1 — Skeleton and fail-fast gate
+
+### Task 1: Repo scaffold (build, lint, test wiring)
+
+**Description:** Create the project skeleton: package.json (ESM, scripts `dev`/`build`/`start`/
+`test`/`coverage`/`lint`/`verify`), two tsconfigs (base with `strict`, `noUncheckedIndexedAccess`,
+`lib: ["ES2023","DOM"]`, `rewriteRelativeImportExtensions`; `tsconfig.main.json` emitting
+main/preload/shared), Vite config with two entries (host `src/renderer/index.html`, viewer
+`src/viewer/index.html` → `dist/renderer`, `dist/viewer`), ESLint 9 flat config with
+typescript-eslint, `.gitignore`, and `git init` + first commit.
+
+**Acceptance criteria:**
+- [ ] `npm run lint` runs and passes on an empty source tree
+- [ ] `npm run build` produces `dist/renderer/index.html` and `dist/viewer/index.html` from stub pages
+- [ ] `npm test` runs `node --test tests/` and exits 0 with one placeholder test that is deleted in Task 2
+- [ ] A `.ts` test file importing another `.ts` file with an explicit `.ts` specifier runs under `node --test` (proves the type-stripping route before real code exists)
+- [ ] `npm run verify` chains lint + test + build
+
+**Verification:**
+- [ ] Run: `npm run lint && npm test && npm run build && npm run verify`
+- [ ] Manual: confirm `dist/` contains both entry HTML files and their assets
+
+**Dependencies:** None
+**Files:** `package.json`, `tsconfig.json`, `tsconfig.main.json`, `vite.config.ts`,
+`eslint.config.js`, `.gitignore`
+**Scope:** M (config; almost no logic)
+
+---
+
+### Task 2: `src/shared` protocol, audio and codec modules + unit tests
+
+**Description:** Write the pure modules every other layer depends on: `protocol.ts` (`Signal`
+union + `parseSignal` guard that returns `null` on garbage), `audio.ts` (`audioModeFor(platform)`
+→ `"loopback"` only on `win32`), `codecs.ts` (`preferH264` stable reorder, nothing filtered) and
+`rtc.ts` (`RTC_CONFIG` with `iceServers: []`, frozen). Unit-test all four, including the frozen
+config, since that is how "no STUN/TURN" stays true.
+
+**Acceptance criteria:**
+- [ ] `parseSignal` returns `null` for invalid JSON, `{}`, `{type: 1}` and `{type:"nope"}`-shaped junk; returns the value for each valid variant
+- [ ] `audioModeFor("win32") === "loopback"`, and `darwin`/`linux` → `null`
+- [ ] `preferH264` puts every `video/H264` entry first, preserves relative order otherwise, drops nothing, and is a no-op on an all-VP8 list
+- [ ] `RTC_CONFIG.iceServers` is empty and frozen (mutating throws in strict mode)
+- [ ] No imports from Node, Electron or the DOM runtimes in these four modules
+
+**Verification:**
+- [ ] Tests: `npm test` (new: `tests/shared.test.ts`)
+- [ ] Build: `npm run build`
+
+**Dependencies:** Task 1
+**Files:** `src/shared/protocol.ts`, `src/shared/audio.ts`, `src/shared/codecs.ts`,
+`src/shared/rtc.ts`, `tests/shared.test.ts`
+**Scope:** M
+
+---
+
+### Task 3: Static HTTP server with path allowlist, `/api/info`, `/probe`
+
+**Description:** `node:http` server bound to `0.0.0.0`, default port 4680 with ephemeral fallback.
+Serves `dist/viewer/` under `/assets/*` through a resolver that refuses anything resolving
+outside that directory, `GET /` → viewer HTML, `GET /api/info` → non-secret status,
+`GET /probe` → `docs/silk-probe.html`. Security headers on every response (CSP, nosniff,
+no-referrer). Export a `startServer({ port })` returning `{ port, close }` so tests can bind
+port 0.
+
+**Acceptance criteria:**
+- [ ] `/assets/../../SPEC.md` and encoded variants return 404, never file contents
+- [ ] `/api/info` returns name/version/pairingOpen and never the PIN or token
+- [ ] Every response carries the CSP + `X-Content-Type-Options: nosniff` headers
+- [ ] Binding port 0 works and reports the real port (test harness requirement)
+- [ ] Server closes cleanly with no open handles left behind
+
+**Verification:**
+- [ ] Tests: `npm test` (new: `tests/http.test.ts`, real `fetch` against a port-0 server)
+- [ ] Manual: `npm start`-less dev check — boot the server with `node --experimental-strip-types` and open `/` in a browser
+
+**Dependencies:** Task 2
+**Files:** `src/server/http.ts`, `src/server/routes.ts`, `tests/http.test.ts`
+**Scope:** M
+
+---
+
+### Task 4: `docs/silk-probe.html` + manual test log skeleton
+
+**Description:** One self-contained diagnostic page (no build step, no dependencies, no CDN) that
+answers **all five branch-deciding checks** from the spec: (1) is `RTCPeerConnection` there at
+all; (2) the full `RTCRtpSender.getCapabilities("video").codecs` list; (3)
+`MediaSource.isTypeSupported` / `MediaRecorder.isTypeSupported` for `video/webm;codecs="vp8,opus"`
+and `video/mp4;codecs="avc1.4d401f,mp4a.40.2"`; (4) an end-to-end MSE loopback in the page —
+`MediaRecorder` on a canvas stream, chunks appended to a `MediaSource`, rendered by `<video>`,
+reporting time-to-first-frame and buffer health; (5) rendered fps and dropped frames after 30 s.
+Also print `navigator.userAgent` and screen size. Create `docs/manual-tests.md` with the Fire TV
+table (model, browser, rendering mode, the five results, pairing steps, latency, audio) and the
+branch decision rule. Readability on a TV: large monospace text, high contrast, each check
+triggered by its own Enter-activatable button so a partial failure still yields partial answers.
+
+**Acceptance criteria:**
+- [ ] Checks 1–3 print results without any user permission or device access
+- [ ] Check 4 completes a full record → append → render loop and prints time-to-first-frame, or prints the exact failing API and reason
+- [ ] Check 5 prints fps and dropped frames after 30 s of check 4 running
+- [ ] Every check is reachable and triggerable with the D-pad alone at `http://<lan-ip>:4680/probe`
+- [ ] No dependency, no build step, single file
+- [ ] `docs/manual-tests.md` contains the table, the five checks, and the Branch A/B decision rule
+
+**Verification:**
+- [ ] Manual (required): run `/probe` on the actual Fire TV and fill the table
+- [ ] Manual: run it in desktop Chrome as a control
+- [ ] Tests: `npm test` (asserts `/probe` is served and contains no `<script src=`)
+
+**Dependencies:** Task 3
+**Files:** `docs/silk-probe.html`, `docs/manual-tests.md`, `tests/http.test.ts`
+**Scope:** S
+
+---
+
+## Checkpoint 1 — Fire TV gate (blocking)
+
+- [ ] `/probe` results recorded in `docs/manual-tests.md`: WebRTC present? codec list? MSE/MediaRecorder types? MSE loopback time-to-first-frame? fps after 30 s?
+- [ ] **Branch decision made by the rule in `SPEC.md`**: Branch A if `RTCPeerConnection` exists in Silk or in any browser installable on the TV (4× lower latency); Branch B otherwise
+- [ ] If Branch A: install and name the browser on the TV; if Branch B: confirm MSE loopback played, since that is the whole transport
+- [ ] `npm run verify` green
+- [ ] Human review. If neither branch is viable (no WebRTC **and** no MSE), **stop** — revise `SPEC.md` before Phase 2
+
+---
+
+## Phase 2 — Pairing and signaling
+
+### Task 5: Pairing store (PIN TTL, rotation, 3-strike lockout, single-use tokens)
+
+**Description:** `pairing.ts` as a pure, injectable module (takes a clock and a random source so
+tests need no timers): generates a 6-digit PIN with `crypto.randomInt`, TTL 60 s, rotates on
+expiry and on the 3rd failure, then locks for 60 s; `verify(pin)` returns a single-use 32-byte
+hex token bound to a session id; `consume(token)` succeeds exactly once; `revoke(sessionId)`
+drops it. Never logs secrets.
+
+**Acceptance criteria:**
+- [ ] PIN matches `/^\d{6}$/` over 10 000 generated PINs (and is not always the same)
+- [ ] An expired PIN fails even when correct; a fresh one is issued on demand
+- [ ] 3 wrong attempts → locked (`retryAfterMs > 0`), PIN rotated, counter reset; correct PIN during lockout is rejected
+- [ ] A token is accepted once and rejected the second time; a token from a revoked session is rejected
+- [ ] Max one live viewer: `reserve()` returns busy while a session is active, and frees on `revoke`
+
+**Verification:**
+- [ ] Tests: `npm test` (new: `tests/pairing.test.ts`, injected clock — no `setTimeout`, no sleeps)
+
+**Dependencies:** Task 2
+**Files:** `src/server/pairing.ts`, `tests/pairing.test.ts`
+**Scope:** M
+
+---
+
+### Task 6: `POST /api/pair` + integration tests
+
+**Description:** Wire the store into the HTTP layer: parse and validate the JSON body at the
+boundary (wrong shape → 400, never a throw), map outcomes to `200 {token}` / `401 invalid_pin` /
+`429 locked+retryAfterMs` / `409 busy`, cap body size, and never echo the PIN back. Also emit a
+`viewer-joined` event on the server's tiny emitter so main can push `HostState` to the host UI.
+
+**Acceptance criteria:**
+- [ ] Wrong PIN → 401; 3 wrong in a row → 429 with `retryAfterMs`; correct PIN → 200 with a token
+- [ ] Malformed body, missing fields, oversized body and non-JSON all → 400 without an unhandled rejection
+- [ ] Response bodies never contain the current PIN
+- [ ] Second pair while a session is live → 409 (and the already-issued token still works)
+- [ ] Server survives 1 000 sequential bad requests without leaking handles or memory growth
+
+**Verification:**
+- [ ] Tests: `npm test` (extends `tests/http.test.ts`)
+- [ ] Manual: `curl` the four outcomes against a locally booted server
+
+**Dependencies:** Task 3, Task 5
+**Files:** `src/server/http.ts`, `src/server/routes.ts`, `src/server/pairing.ts`, `tests/http.test.ts`
+**Scope:** M
+
+---
+
+### Task 7: WebSocket signaling relay with token/origin validation + two-peer tests
+
+**Description:** `ws.ts` on the same HTTP server: validate `Origin` (no cross-site upgrade),
+consume the single-use token at connect (bad/replayed → `close 1008`), pair exactly one host
+socket with one viewer socket, relay `Signal` frames verbatim in both directions (drop
+unparseable frames, never throw), propagate `stop`, and clean up both sockets when either side
+disconnects. Plus `tests/fixtures/fake-peer.ts`, a tiny `ws` client used by tests and by manual
+debugging before Electron exists.
+
+**Acceptance criteria:**
+- [ ] Connect without token, with a replayed token, or with a foreign `Origin` → `1008`, no session created
+- [ ] Host and viewer sockets in one session relay offer/answer/ICE in both directions byte-for-byte
+- [ ] Sending garbage over the socket is dropped without killing the session
+- [ ] `stop` from the host is delivered to the viewer and closes it; a viewer drop frees the session for a new pair
+- [ ] Two fake peers complete a full offer/answer/ICE exchange against the real server (no mock of our own code)
+
+**Verification:**
+- [ ] Tests: `npm test` (new: `tests/ws.test.ts`)
+- [ ] Manual: two `node --experimental-strip-types tests/fixtures/fake-peer.ts` processes exchange a message through the server
+
+**Dependencies:** Task 6
+**Files:** `src/server/ws.ts`, `src/server/session.ts`, `tests/ws.test.ts`, `tests/fixtures/fake-peer.ts`
+**Scope:** M
+
+---
+
+## Checkpoint 2 — Protocol proven headlessly
+
+- [ ] Two fake peers complete offer/answer/ICE relay through the real server
+- [ ] Replayed token, bad origin, and 4th failed PIN all rejected with correct codes
+- [ ] `npm run verify` green, zero suppressions, coverage on shared + pairing ≥ 80% (90% at Task 14)
+- [ ] Human review before the Electron shell is written
+
+---
+
+## Phase 3 — First real frame (walking skeleton)
+
+### Task 8: Electron shell: security posture, permission handlers, switches, preload IPC
+
+**Description:** `main.ts`: create the window with `contextIsolation: true`, `sandbox: true`,
+`nodeIntegration: false`, deny `setWindowOpenHandler` and `will-navigate`, apply the
+`WebRtcHideLocalIpsWithMdns` switch before `app.whenReady`, install permission handlers that
+allow only `display-capture` for the host page, start the server, and bridge IPC
+(`listSources`, `capabilities`, `start`, `setAudio`, `stop`, `signal` both ways, `state` push).
+`display-media.ts` wires `setDisplayMediaRequestHandler` to grant the chosen source plus
+`loopback` audio when available. `preload.ts` exposes exactly the documented 9-function surface
+and nothing else. Host UI stays on `file://`.
+
+**Acceptance criteria:**
+- [ ] App launches, loads the host page from `file://`, and `window.mirror` exposes only the documented functions
+- [ ] Renderer cannot reach `require`/`process`/`fs` (typed in devtools: all undefined)
+- [ ] `display-capture` is granted for the host page; `media`, `geolocation`, `usb` requests are denied
+- [ ] `start()` grants the selected source; with audio requested on a supported OS the returned stream has an audio track, and on an unsupported OS it returns video-only plus `{ audio: false }`
+- [ ] Clicking an external link or navigating does nothing (open handler and navigation denied)
+
+**Verification:**
+- [ ] Tests: `npm test` (pure helpers only — the Electron path is verified manually here)
+- [ ] Manual: devtools — call each `window.mirror` function, confirm source list, confirm no Node globals
+- [ ] Manual: `/api/info` reachable from the LAN while the app runs
+
+**Dependencies:** Checkpoint 2
+**Files:** `src/main/main.ts`, `src/main/display-media.ts`, `src/main/ipc.ts`,
+`src/preload/preload.ts`, `src/renderer/index.html`
+**Scope:** M
+
+---
+
+### Task 9: Host capture engine: `getDisplayMedia`, H.264 preference, quality/audio, peer wiring
+
+**Branch: A (WebRTC).** If Checkpoint 1 selects Branch B, replace the peer-connection plumbing
+with `MediaRecorder` on the captured stream, `pickMimeType` for the container, chunks sent over
+the same socket, and binary chunk relay in `src/server/ws.ts` (+1 integration test). Quality,
+audio toggle, teardown and IPC wiring stay exactly as described.
+
+**Description:** `mirror.ts` in the renderer: request display media, attach the video track with
+`contentHint = "detail"`, apply the chosen quality cap via `applyConstraints`, create the
+`RTCPeerConnection` with the frozen `RTC_CONFIG`, set `preferH264` on the video transceiver
+**before** `createOffer`, add the audio track when granted, relay `Signal` messages over
+`window.mirror`, add/remove the audio track on `setAudio`, and tear everything down on `stop`
+(tracks stopped, pc closed, ICE sent to the viewer first).
+
+**Acceptance criteria:**
+- [ ] Offer SDP contains H.264 as the first video payload type; VP8/VP9 still present as fallback
+- [ ] The peer connection uses `iceServers: []` (asserted at runtime, not only in the constant)
+- [ ] Quality selection caps the resolution via `applyConstraints` without restarting capture
+- [ ] `setAudio(false)` removes the track live; `setAudio(true)` restores it; no re-negotiation glitch that drops video
+- [ ] `stop()` stops every track and closes the pc; a second `start()` works without reloading the app
+- [ ] Audio-unsupported OS: `start()` succeeds, video flows, `HostState.audio === false`
+
+**Verification:**
+- [ ] Tests: `npm test` (pure SDP/codec-order helper)
+- [ ] Manual: devtools — inspect `getStats()` for `codecId`/`framesPerSecond` locally before any TV test
+- [ ] Manual: verify with a fake peer in the same browser session that offer/answer completes
+
+**Dependencies:** Task 8
+**Files:** `src/renderer/mirror.ts`, `src/renderer/App.tsx`, `src/renderer/main.tsx`
+**Scope:** M
+
+---
+
+### Task 10: Viewer app: D-pad PIN pad, `<video>`, overlay controls, `?debug=1` stats
+
+**Branch: A (WebRTC).** If Branch B is selected, the transport half changes to `MediaSource` +
+`SourceBuffer` append loop with live-edge trimming and buffer-health reporting, `video.muted` for
+mute, and socket close on stop. The PIN pad, pairing, controls, focus handling, safe-area sizing
+and `?debug=1` panel are identical in both branches — this is deliberately where the fork stops.
+
+**Description:** The viewer React app served at `/`: fetch `/api/info`, show a 10-button numeric
+pad (no `<input>` — this is deliberate, it summons Silk's on-screen keyboard), auto-submit on the
+6th digit, `POST /api/pair`, open the WebSocket, create the recv-only peer connection, answer the
+offer, render the stream in `<video autoplay playsInline muted>`, then attempt unmuted playback.
+Overlay controls (mute, fullscreen, stop) as real buttons with visible focus, auto-hiding after
+5 s, arrow-key + Enter navigable. `?debug=1` shows codec, resolution, fps, bitrate, packets lost
+and audio level from `getStats()`. `?p=` prefills the PIN and is scrubbed with
+`history.replaceState`. 10-foot sizing with a 5% safe-area inset.
+
+**Acceptance criteria:**
+- [ ] Pairing is completable with arrow keys + Enter only; no element summons a virtual keyboard
+- [ ] Enter on the 6th digit submits; wrong PIN shows the server's error text; lockout shows the retry time
+- [ ] Stream renders, mute toggles audio, fullscreen works, `?debug=1` reports the negotiated codec
+- [ ] Blurred focus is always visible (≥4 px outline) on every control
+- [ ] After load with `?p=`, the PIN is gone from the address bar and from `history.length` navigation
+
+**Verification:**
+- [ ] Tests: `npm test` (PIN-pad state machine and URL scrubbing as pure helpers)
+- [ ] Manual: desktop Chrome — full pair → stream → mute → stop cycle with a fake or real host
+- [ ] Manual: keyboard-only pass (no mouse) on the same flow
+
+**Dependencies:** Task 9
+**Files:** `src/viewer/index.html`, `src/viewer/main.tsx`, `src/viewer/PinPad.tsx`,
+`src/viewer/Watch.tsx`, `src/viewer/viewer.css`
+**Scope:** M
+
+---
+
+## Checkpoint 3 — End-to-end on the Fire TV (blocking)
+
+- [ ] First frame within 3 s of PIN submission; pairing done with the remote alone; no on-screen keyboard
+- [ ] `?debug=1` reports H.264 and stable 1080p30 with no growing dropped frames
+- [ ] Audio audible and in sync; mute works; Stop ends playback within 1 s
+- [ ] `npm run verify` green
+- [ ] Human review: record results in `docs/manual-tests.md` before Phase 4
+
+---
+
+## Phase 4 — Host UI, polish and hardening
+
+### Task 11: Host UI: URL list, QR code, viewer status, quality/audio toggles, error states
+
+**Description:** Build the actual host window: every non-internal IPv4 URL as selectable text, a
+QR code for the primary URL rendered in main with `qrcode` and passed through `HostState`
+(payload `http://<ip>:<port>/?p=<pin>`), a large readable PIN with a countdown, source picker
+(screen/window), quality selector (default 1080p) and audio switch (default on), live viewer
+status with the device name, and human-readable errors instead of silent failures (source
+capture denied, audio unavailable, no LAN interface, port fallback).
+
+**Acceptance criteria:**
+- [ ] QR encodes the reachable URL with the PIN and is scannable from a phone at arm's length
+- [ ] PIN and countdown refresh visibly at expiry; scanning the QR opens the viewer with the PIN prefilled
+- [ ] Start/Stop, quality and audio toggles reflect real engine state (no optimistic UI that lies)
+- [ ] Each failure path from the spec shows a specific message, never a raw exception or a dead button
+- [ ] No LAN-reachable page exposes the host UI or the PIN
+
+**Verification:**
+- [ ] Tests: `npm test` (QR payload builder and URL selection helpers)
+- [ ] Manual: scan the QR with a phone, confirm prefill; toggle audio mid-session and watch the viewer
+
+**Dependencies:** Checkpoint 3
+**Files:** `src/main/qr.ts`, `src/main/main.ts`, `src/renderer/PairPanel.tsx`,
+`src/renderer/App.tsx`
+**Scope:** M
+
+---
+
+### Task 12: Viewer polish: autoplay-tap, mute/fullscreen/hotkeys, ICE-restart reconnect
+
+**Description:** Handle the real-room cases: keep video playing when unmuted playback is blocked
+and surface a single "press OK for sound" state; wire `m`/`f`/Enter hotkeys alongside the
+buttons; auto-hide and restore controls; on `iceConnectionState === "failed"` attempt
+`restartIce()` once, then show a reload prompt with a reconnect button; on host `stop`, show a
+"host stopped sharing" screen rather than a frozen frame; keep the video filling the screen with
+`object-fit: contain` and correct overscan margins.
+
+**Acceptance criteria:**
+- [ ] Unmuted playback blocked → video still plays, one clear affordance enables sound, no error toast
+- [ ] `restartIce()` is attempted exactly once per failure and recovers a simulated drop (toggle the host's Wi-Fi or kill the server socket)
+- [ ] Host `stop` produces the stopped screen within 1 s, and the viewer can re-pair without a reload
+- [ ] Hotkeys and buttons stay in sync (mute state reflected in both)
+- [ ] No control is reachable only by mouse or only by touch
+
+**Verification:**
+- [ ] Tests: `npm test` (reconnect state machine as a pure reducer)
+- [ ] Manual: network-drop test on the real device; blocked-autoplay test in a fresh browser profile
+
+**Dependencies:** Checkpoint 3
+**Files:** `src/viewer/Watch.tsx`, `src/viewer/stats.ts`, `src/viewer/viewer.css`
+**Scope:** M
+
+---
+
+### Task 13: Security pass, README and troubleshooting
+
+**Description:** Consolidate the security posture with tests: CSP present on every served route,
+origin check, token single-use, lockout, path traversal, and no secrets in any response. Write
+the README: what it is, requirements, install/run, pairing walkthrough with the Fire TV (type
+the URL once, bookmark it, then PIN only), and a troubleshooting section covering Silk
+accelerated rendering mode, Windows Firewall, mDNS/AP-isolation symptoms, autoplay policies,
+and the audio-unsupported path. Document the accepted risks from the spec plainly.
+
+**Acceptance criteria:**
+- [ ] A test asserts the security headers and CSP on every route, including 404s
+- [ ] A test asserts no response body contains the current PIN or an issued token
+- [ ] README lets a stranger run the app, pair a Fire TV and diagnose the four documented failure modes
+- [ ] Accepted risks (plain HTTP pairing, photographable QR, whole-system audio) are stated, not buried
+- [ ] No dependency added beyond `ws` and `qrcode`
+
+**Verification:**
+- [ ] Tests: `npm test` (new: `tests/security.test.ts`)
+- [ ] Manual: follow the README from scratch on a clean checkout path and fix anything that lies
+
+**Dependencies:** Task 11, Task 12
+**Files:** `tests/security.test.ts`, `README.md`, `docs/manual-tests.md`, `src/server/http.ts`
+**Scope:** M
+
+---
+
+### Task 14: Coverage ≥ 90%, `npm run verify` gate, full acceptance run
+
+**Description:** Reach and hold the quality bar: ≥90% line coverage on `protocol.ts`, `audio.ts`,
+`codecs.ts` and `pairing.ts`; `npm run verify` = lint + test + coverage + build + the no-STUN
+`grep` gate; record every `SPEC.md` success criterion with its evidence (test name or manual log
+entry) in `docs/manual-tests.md`.
+
+**Acceptance criteria:**
+- [ ] Coverage report shows ≥90% lines on the four pure modules
+- [ ] `npm run verify` fails if `iceServers:` appears non-empty anywhere in `src/` or `dist/`
+- [ ] Every one of the 17 spec success criteria has a named evidence row, or is explicitly marked "not verified" with the reason
+- [ ] No skipped tests, no suppressed lint errors
+- [ ] Working tree committed in logical chunks with messages that reference the spec sections
+
+**Verification:**
+- [ ] `npm run verify` green from a clean `node_modules` install
+- [ ] Manual: full acceptance run on the Fire TV with the log filled in
+
+**Dependencies:** Task 13
+**Files:** `package.json`, `docs/manual-tests.md`, `tests/*.test.ts` (coverage gaps only)
+**Scope:** M
+
+---
+
+## Checkpoint: Complete
+
+- [ ] All 17 success criteria verified with evidence
+- [ ] `npm run verify` green on a clean install
+- [ ] Fire TV acceptance run logged with the device model and Silk rendering mode
+- [ ] Human review and sign-off

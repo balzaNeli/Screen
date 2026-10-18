@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>screenmirror probe</title>
+    <link rel="stylesheet" href="/probe.css" />
+  </head>
+  <body>
+    <h1>screenmirror probe</h1>
+    <p class="hint">
+      Run every check with the remote. Results stay on screen — photograph them, then write them
+      into <b>docs/manual-tests.md</b>. Click 4 to watch a 30 s loopback stream.
+    </p>
+
+    <div class="ops">
+      <button id="run-all" autofocus>Run all</button>
+      <button data-run="env">1 · Environment</button>
+      <button data-run="caps">2 · Codec capabilities</button>
+      <button data-run="types">3 · MSE / MediaRecorder types</button>
+      <button data-run="loop">4 · MSE loopback (30 s)</button>
+      <button id="sound">Sound on/off</button>
+      <button id="stop">Stop</button>
+    </div>
+
+    <div class="stage-wrap">
+      <video id="stage" playsinline muted></video>
+      <span id="stage-note">no stream yet</span>
+    </div>
+
+    <pre id="out"></pre>
+
+    <script src="/probe.js"></script>
+  </body>
+</html>
