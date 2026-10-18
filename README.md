@@ -71,12 +71,23 @@ The probe runs its safe checks (1–4) from a single button.
 The pairing endpoint, by hand:
 
 ```bash
+# POSIX shell, Git Bash, WSL
 curl -X POST http://127.0.0.1:4680/api/pair \
-  -H "content-type: application/json" -d '{"pin":"<the PIN in the server console>"}'
-# 200 {"token":"…"} · 401 {"error":"invalid_pin","attemptsLeft":2} · 429 {"error":"locked","retryAfterMs":…}
+  -H "content-type: application/json" -d '{"pin":"482720"}'
 ```
 
-(On Windows PowerShell that is `curl.exe`, not `curl` — the PowerShell alias is a different tool.)
+```powershell
+# Windows PowerShell — verified on PS 5.1, which mangles inner quotes on the way to a native
+# curl.exe (the JSON arrives as {pin:482720} and the server rightly calls it bad_request).
+# Invoke-WebRequest has no such problem, and the catch prints the error body:
+$body = '{"pin":"482720"}'
+try   { (Invoke-WebRequest -Method Post -Uri http://127.0.0.1:4680/api/pair -ContentType application/json -Body $body -UseBasicParsing).Content }
+catch { (New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())).ReadToEnd() }
+```
+
+Either way: `200 {"token":"…"}` · `401 {"error":"invalid_pin","attemptsLeft":2}` ·
+`429 {"error":"locked","retryAfterMs":…}` · `409 {"error":"busy"}` ·
+`400 {"error":"bad_request"}` for a malformed body. Substitute the PIN the server printed.
 
 `npm run dev` and `npm start` become the app's entry points in Task 8; until the Electron
 dependency lands, `npm run serve` is what you want.
