@@ -60,7 +60,7 @@ Tasks are recorded in full in `tasks/todo.md` (index below mirrors it).
 - [ ] Probe check 4b (720p30) run on the TV. Not blocking Phase 2
 
 ### Phase 2 — Pairing and signaling
-- [ ] Task 5: Pairing store (PIN TTL, rotation, 3-strike lockout, single-use tokens) + unit tests
+- [x] Task 5: Pairing store (PIN TTL, rotation, 3-strike lockout, single-use tokens) + unit tests
 - [ ] Task 6: `POST /api/pair` + integration tests
 - [ ] Task 7: WebSocket signaling relay with token/origin validation + two-peer integration tests
 

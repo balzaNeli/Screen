@@ -2,8 +2,9 @@
 
 Source of truth: `SPEC.md` (rev 5, approved) and `tasks/plan.md`.
 
-**Progress:** Tasks 1–4 done. **Checkpoint 1 passed 2026-10-18 → transport is WebRTC in Silk
-(Branch A); the MSE alternative is rejected on evidence.** Next: Task 5.
+**Progress:** Tasks 1–5 done. **Checkpoint 1 passed 2026-10-18 → transport is WebRTC in Silk
+(Branch A); the MSE alternative is rejected on evidence.** Probe check 4 also ran on the TV that
+day: connected, `video/H264` negotiated, first frame 942 ms. Next: Task 6 (`POST /api/pair`).
 
 **Definition of Done — every task:**
 - [ ] `npm test` passes (no new skips, no deleted assertions)
@@ -147,11 +148,12 @@ hex token bound to a session id; `consume(token)` succeeds exactly once; `revoke
 drops it. Never logs secrets.
 
 **Acceptance criteria:**
-- [ ] PIN matches `/^\d{6}$/` over 10 000 generated PINs (and is not always the same)
-- [ ] An expired PIN fails even when correct; a fresh one is issued on demand
-- [ ] 3 wrong attempts → locked (`retryAfterMs > 0`), PIN rotated, counter reset; correct PIN during lockout is rejected
-- [ ] A token is accepted once and rejected the second time; a token from a revoked session is rejected
-- [ ] Max one live viewer: `reserve()` returns busy while a session is active, and frees on `revoke`
+- [x] PIN matches `/^\d{6}$/` over 10 000 generated PINs (and is not always the same)
+- [x] An expired PIN fails even when correct; a fresh one is issued on demand, and an expired attempt is not counted as a failure
+- [x] 3 wrong attempts → locked (`retryAfterMs > 0`), PIN rotated, counter reset; correct PIN during lockout is rejected
+- [x] A token is accepted once and rejected the second time; a token from a revoked session is rejected
+- [x] Max one live viewer: `verify()` answers `busy` while a session holds the seat, and `revoke()` frees it. A viewer that never connects loses the seat (and its token) after `connectTtlMs`
+- [x] Junk at the trust boundary (`undefined`, numbers, arrays, wrong lengths, non-ASCII digits) is an invalid attempt, never a throw
 
 **Verification:**
 - [ ] Tests: `npm test` (new: `tests/pairing.test.ts`, injected clock — no `setTimeout`, no sleeps)

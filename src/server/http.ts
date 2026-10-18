@@ -22,7 +22,7 @@ const MIME: Record<string, string> = {
 };
 
 // The viewer never fetches anything but its own bundle, and it needs no camera or microphone.
-// media-src blob: is for the MediaSource path (Branch B) and for the probe page.
+// media-src blob: is for the probe page's loopback test, which plays from an object URL.
 const CSP = "default-src 'self'; connect-src 'self' ws:; img-src 'self' data:; media-src blob:; object-src 'none'; base-uri 'none'; form-action 'self'";
 
 /** Diagnostic pages served from docs/. Fixed names only — no path arithmetic, nothing to escape. */
