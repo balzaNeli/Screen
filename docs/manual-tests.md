@@ -21,7 +21,7 @@ TV rendering mode at the time of the run: _fill in if you remember it_.
 | 3 · H.264 recording | **impossible**: `MediaSource=yes` but `MediaRecorder=no` for every `avc1`/`mp4` type |
 | 4 · MSE loopback (old check) | **hung the Fire TV hard** — needed a power cycle |
 | 4 · WebRTC loopback, 640x360@15, 30 s | **connected, paints, H.264 negotiated.** first frame 942 ms; 420 painted frames (13.9 fps of 15); playback quality total=429 dropped=64 |
-| 4b · same at 720p30 | not run yet |
+| 4b · same at 720p30 | **hung the device hard** — needed a power cycle, exactly like the old MSE loopback. The log reached `connecting → connected` and stopped there: no frame numbers. Not re-run |
 
 ### Decision: Branch A (WebRTC)
 
@@ -57,8 +57,33 @@ Reading it honestly:
 - **64 dropped frames (15%) is a worst case, not a forecast.** In that test the stick was
   simultaneously capturing a canvas, encoding H.264 *and* decoding it, while compositing a 1080p
   screen. In the real product the Fire TV only decodes, and the encoding happens on the PC.
-- **Not measured: 720p30 and 1080p30.** Check 4b raises the canvas to 1280x720@30, which says more
-  about the stick than 640x360 did. The 1080p30 criterion is still a Checkpoint 3 item.
+- **720p30 and 1080p30 are still unmeasured for the receive-only path** — check 4b answered a
+  different question, and answered it loudly (below).
+
+### What check 4b proved (2026-10-18, later): never make this device encode
+
+`4b` is the same loopback at 1280x720@30. Result: the Fire TV **hung hard and needed a power
+cycle**, exactly like the MSE loopback. The log only reached `connecting → connected`; nothing was
+printed before it stopped responding.
+
+Read it with the right workload in mind:
+
+- in the probe loopback **the stick is the sender**: it captures a canvas, *encodes* 720p30 H.264,
+  then decodes its own stream, while Silk is still compositing a 1080p UI. The likely culprit is
+  the encode path — software H.264 on a stick CPU — not decode;
+- **the product never does that.** The viewer is receive-only: the PC captures and encodes, the TV
+  decodes one stream, which is the workload the stick is built for;
+- so 4b does **not** prove that 720p30 cannot be *received* here. It does prove this device has no
+  headroom for anything extra: asking it to produce media is how you brick it.
+
+Consequences, now requirements:
+
+1. Nothing that captures or encodes media ever runs on the viewer. That was already a
+   non-negotiable; 4b is the second measurement that says why.
+2. The receive-only budget is unproven, so Checkpoint 3 measures **720p30 first**, and 1080p30 only
+   if 720p30 holds flat over two minutes. A slowdown there is a product finding, not a test
+   finding — it lowers the default quality.
+3. Check 4b is not re-run on this device; it now asks for a second confirming tap, like check 6.
 
 ## Checkpoint 3 — end-to-end acceptance (Fire TV)
 
@@ -69,7 +94,7 @@ Reading it honestly:
 | 3 | Glass-to-glass latency ≤ 250 ms | |
 | 4 | Pairing completable with the remote alone, no on-screen keyboard | |
 | 5 | Codec in `?debug=1` is H.264 | |
-| 6 | 1080p30 holds, dropped frames flat over 2 min | |
+| 6 | **720p30 first**, dropped frames flat over 2 min; 1080p30 only if it does. Any slowdown: stop, and that is the product's ceiling | |
 | 7 | Fullscreen fills the panel, host screen edges not cropped | |
 | 8 | Audio audible and in sync (click a window, hear the click) | |
 | 9 | Viewer mute button silences and restores | |
@@ -95,4 +120,8 @@ Reading it honestly:
   24 buffers and stops itself after 20 s. It is a diagnostic, and a diagnostic that bricks the
   device is worse than no diagnostic.
 - The WebRTC check defaults to 640x360@15 and stops itself after 30 s. "Retry at 720p30" is an
-  explicit, deliberate escalation.
+  explicit, deliberate escalation — **and it hung this device hard on 2026-10-18** (power cycle,
+  `connecting → connected`, no numbers). It now asks for a second confirming tap, like check 6, and
+  it is not re-run on this TV.
+- Two hard hangs, both times when the stick had to *produce* media: MSE loopback, and the 720p30
+  WebRTC loopback. The rule that follows: media never leaves the viewer.

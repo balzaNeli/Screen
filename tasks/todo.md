@@ -134,7 +134,7 @@ rejected transport. Results and safety rules in `docs/manual-tests.md`.
 - [x] Consequence recorded as a requirement: **the viewer is receive-only** and must never touch `navigator.mediaDevices`
 - [x] `npm run verify` green
 - [x] Probe check 4 (capped WebRTC loopback 640x360@15) run on the TV, 2026-10-18 17:33: connected, H.264 negotiated, first frame 942 ms, 420/450 frames painted
-- [ ] Probe check 4b (720p30) run on the TV — says whether the stick holds higher resolutions before Checkpoint 3. Not blocking Phase 2
+- [x] Probe check 4b (720p30) run on the TV, 2026-10-18: **it hung the `AFTCA002` hard (power cycle)**, log stopped at `connecting → connected`, no frame numbers. Read as: the stick must never *encode*; the receive-only ceiling stays a Checkpoint 3 measurement (720p30 first). The check now asks twice, like check 6, and is not re-run on this device
 
 ---
 

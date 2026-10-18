@@ -286,12 +286,14 @@ in the house, a Silk update or a friend's device will ask the same questions aga
 | 1 | Capabilities: `RTCPeerConnection`, `navigator.mediaDevices`, `MediaSource`, `MediaRecorder`, `setCodecPreferences`, rVFC | the Branch A/B question, in ten seconds |
 | 2 | Codec list from `RTCRtpSender/Receiver.getCapabilities` | whether H.264 is offered at all |
 | 3 | `MediaSource`/`MediaRecorder` support per container | why H.264 recording was never an option here |
-| 4 | WebRTC loopback: 640x360@15 for 30 s, H.264 preferred, connection state, negotiated codec, painted frames | the one measurement still missing for this device |
-| 4b | Same at 720p30, on demand | deliberate escalation, never the default |
+| 4 | WebRTC loopback: 640x360@15 for 30 s, H.264 preferred, connection state, negotiated codec, painted frames | ran 2026-10-18: connected, `video/H264` negotiated, first frame 942 ms, 420/450 frames painted — the check that decided Branch A |
+| 4b | Same at 720p30, on demand | escalated on the real TV: it **hung the device hard** (power cycle). Kept as evidence that the viewer must never encode |
 | 6 | MSE loopback, capped and double-confirmed | kept only as evidence against the rejected transport |
 
-Safety rules, learned by freezing a Fire TV: check 6 asks for a second confirming click, caps its
-append queue at 24 buffers and stops itself after 20 s; check 4 self-stops after 30 s.
+Safety rules, learned by freezing a Fire TV **twice**: check 6 asks for a second confirming click,
+caps its append queue at 24 buffers and stops itself after 20 s; check 4 self-stops after 30 s;
+check 4b asks twice as well and is not re-run — on 2026-10-18 it hung an `AFTCA002` by asking the
+*stick* to encode 720p30.
 
 ### System audio
 
@@ -405,6 +407,11 @@ build with an unhandled `uncaughtException`; remove the VP8 fallback from the co
 - **Silk hides `navigator.mediaDevices`** (no camera or microphone on a TV) even though
   `RTCPeerConnection` works. The viewer is receive-only by design, so this is fine — but any
   future feature that captures from the viewer's device (voice, screenshots) will not work here.
+- **The stick must never be the sender.** Two measurements — a capped 640x360@15 MSE loopback and
+  the 720p30 WebRTC loopback (probe check 4b) — each hung an `AFTCA002` hard enough to need a power
+  cycle, and both asked the device to *encode*. The viewer stays receive-only. Its **receive**
+  ceiling is still unmeasured: Checkpoint 3 tries 720p30 first and 1080p30 only if 720p30 holds
+  flat, and a slowdown there lowers the default quality rather than being argued with.
 - **Silk accelerated rendering** may break other web-platform features on some Fire TV models;
   the documented workaround is switching Silk's rendering mode off.
 - Fire TV URLs must be typed once with the remote; the README documents bookmarking the URL.
@@ -427,5 +434,6 @@ Default quality: 1080p. Microphone: out of scope (system audio only).
 The same day, a capped 640x360@15 loopback **connected and negotiated `video/H264`**, first frame
 in 942 ms — so all five criteria are now measured ✓ except the one that needs the host. MSE +
 WebSocket chunk streaming is rejected and recorded in the transport section above.
-Still unverified: 720p30/1080p30 on the stick (probe check 4b, Checkpoint 3) and audio, which
-cannot be tested without the host.
+Still unverified: the **receive-only** ceiling on the stick — 4b hung the device as a *sender*, so
+720p30 and 1080p30 arrive as Checkpoint 3 measurements, in that order — and audio, which cannot be
+tested without the host.

@@ -75,7 +75,8 @@ covers everything, currently clean) after touching those.
 - Signaling relays `Signal` frames verbatim and never parses SDP.
 - New runtime dependencies need a very good reason: `ws` + `qrcode` are the budget (`react`,
   `react-dom` are bundled into the two SPAs by Vite).
-- Nothing heavy runs on a Fire TV for fun. A 720p30 `MediaRecorder` → `MediaSource` loopback
-  froze an AFTCA002 hard enough to need a power cycle; that transport is rejected in `SPEC.md`.
-  Hardware results live in `docs/manual-tests.md`, and the probe page is at `/probe` — its risky
-  check is gated behind a second confirming click.
+- Nothing heavy runs on a Fire TV for fun. Two loopbacks — a 720p30 `MediaRecorder` → `MediaSource`
+  and a 720p30 WebRTC one (probe check 4b) — each froze an `AFTCA002` hard enough to need a power
+  cycle; the MSE transport is rejected in `SPEC.md`, and the rule they teach is that the stick
+  never *encodes*. Hardware results live in `docs/manual-tests.md`, and the probe page at `/probe`
+  puts both risky checks (4b, 6) behind a second confirming click.

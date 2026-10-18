@@ -9,9 +9,10 @@
   <body>
     <h1>screenmirror probe</h1>
     <p class="hint">
-      Press <b>Run all</b>: checks 1–4 are safe. Check 6 (MSE) hung an AFTCA002 hard on
-      2026-10-18 — it asks for a second confirmation before it runs. Photograph the results and
-      write them into <b>docs/manual-tests.md</b>.
+      Press <b>Run all</b>: checks 1–4 are safe. Checks <b>4b</b> (720p30) and <b>6</b> (MSE) each
+      hung an AFTCA002 hard on 2026-10-18 and needed a power cycle — both ask for a second
+      confirmation before they run. Photograph the results and write them into
+      <b>docs/manual-tests.md</b>.
     </p>
 
     <div class="ops">
@@ -20,7 +21,7 @@
       <button data-run="caps">2 · Codec capabilities</button>
       <button data-run="types">3 · MSE / MediaRecorder types</button>
       <button data-run="webrtc">4 · WebRTC loopback (safe, 30 s)</button>
-      <button id="boost">4b · Retry at 720p30</button>
+      <button id="boost">4b · Retry at 720p30 (hung the TV once)</button>
       <button data-run="mse">6 · MSE loopback (may hang the TV)</button>
       <button id="sound">Sound on/off</button>
       <button id="stop">Stop</button>

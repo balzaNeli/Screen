@@ -479,7 +479,19 @@ document.getElementById("run-all").addEventListener("click", function () {
   runWebrtc(640, 360, 15);
 });
 
+/* 4b hung an AFTCA002 hard on 2026-10-18 (power cycle): it asks twice, like check 6. */
+var boostArmed = false;
+
 document.getElementById("boost").addEventListener("click", function () {
+  var button = document.getElementById("boost");
+  if (!boostArmed) {
+    boostArmed = true;
+    button.textContent = "4b · 720p30 — SURE? IT HUNG THIS TV";
+    line("*** check 4b hung an AFTCA002 hard on 2026-10-18: it froze and needed a power cycle. Tap again to run anyway. ***", "no");
+    return;
+  }
+  boostArmed = false;
+  button.textContent = "4b · Retry at 720p30 (hung the TV once)";
   runWebrtc(1280, 720, 30);
 });
 
@@ -490,4 +502,4 @@ document.getElementById("sound").addEventListener("click", function () {
   line("sound: " + (stage.muted ? "muted" : "ON — you should hear a 220 Hz hum"));
 });
 
-line("screenmirror probe ready. Press 'Run all' (checks 1-4, safe). Check 6 is the risky one.");
+line("screenmirror probe ready. Press 'Run all' (checks 1-4, safe). Checks 4b and 6 ask twice: both hung a Fire TV once.");
