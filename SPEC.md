@@ -417,6 +417,8 @@ toggle + viewer mute. Primary viewer: **Fire TV / Silk**, D-pad only, no camera,
 Default quality: 1080p. Microphone: out of scope (system audio only).
 **Transport: WebRTC in Silk — decided 2026-10-18 by probe evidence** (`AFTCA002`, Silk 144:
 `RTCPeerConnection` yes, `navigator.mediaDevices` no, H.264 offered, H.264 recording impossible).
-MSE + WebSocket chunk streaming is rejected and recorded in the transport section above.
-Still unverified: that a real Fire TV peer connection *connects and paints* — probe check 4
-(capped, safe) or Checkpoint 3 will say.
+The same day, a capped 640x360@15 loopback **connected and negotiated `video/H264`**, first frame
+in 942 ms — so all five criteria are now measured ✓ except the one that needs the host. MSE +
+WebSocket chunk streaming is rejected and recorded in the transport section above.
+Still unverified: 720p30/1080p30 on the stick (probe check 4b, Checkpoint 3) and audio, which
+cannot be tested without the host.

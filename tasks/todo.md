@@ -131,7 +131,8 @@ rejected transport. Results and safety rules in `docs/manual-tests.md`.
 - [x] **Decision: WebRTC in Silk. No browser install needed.** The old MSE loopback test froze the device hard → that transport is rejected and the test is now capped and double-confirmed
 - [x] Consequence recorded as a requirement: **the viewer is receive-only** and must never touch `navigator.mediaDevices`
 - [x] `npm run verify` green
-- [ ] Probe check 4 (capped WebRTC loopback) run on the TV — confirms a real connection before Checkpoint 3; not blocked by this, the pair/invite work can proceed
+- [x] Probe check 4 (capped WebRTC loopback 640x360@15) run on the TV, 2026-10-18 17:33: connected, H.264 negotiated, first frame 942 ms, 420/450 frames painted
+- [ ] Probe check 4b (720p30) run on the TV — says whether the stick holds higher resolutions before Checkpoint 3. Not blocking Phase 2
 
 ---
 

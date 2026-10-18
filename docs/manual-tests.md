@@ -20,6 +20,8 @@ TV rendering mode at the time of the run: _fill in if you remember it_.
 | 3 · recordable + playable container | only `video/webm;codecs="vp8,opus"` and `vp9,opus` |
 | 3 · H.264 recording | **impossible**: `MediaSource=yes` but `MediaRecorder=no` for every `avc1`/`mp4` type |
 | 4 · MSE loopback (old check) | **hung the Fire TV hard** — needed a power cycle |
+| 4 · WebRTC loopback, 640x360@15, 30 s | **connected, paints, H.264 negotiated.** first frame 942 ms; 420 painted frames (13.9 fps of 15); playback quality total=429 dropped=64 |
+| 4b · same at 720p30 | not run yet |
 
 ### Decision: Branch A (WebRTC)
 
@@ -40,12 +42,23 @@ browser install is needed. Branch B is dead on evidence, not on preference:
 3. `preferH264` must not filter VP8/VP9 out — Silk's H.264 hardware path is per-codec, and a
    failed H.264 negotiation must still fall back.
 
-### Still unverified (Checkpoint 3)
+### What check 4 proved, and what it did not (2026-10-18, 17:33)
 
-Check 4 only proved that a loopback peer connection is *constructible*; the new safe check
-(`Run all`, check 4: 640x360@15 for 30 s, then "Retry at 720p30") measures whether it actually
-connects and paints on this device. Run it when convenient — it is capped and self-stopping, and
-it does not need the host. Until then, real end-to-end behaviour is unknown.
+Measured on the same `AFTCA002`: `connecting → connected`, **negotiated codec `video/H264`** (the
+preference took effect), first painted frame at 942 ms, 420 painted frames over 30 s (13.9 of the
+15 requested), `getVideoPlaybackQuality` total=429 dropped=64.
+
+Reading it honestly:
+
+- **It works.** ICE and DTLS complete in Silk, H.264 negotiates and hardware-paints. The single
+  biggest remaining unknown — "connects on paper but not in practice" — is answered.
+- **942 ms is a same-device loopback** with no network RTT, and it includes keyframe wait. The
+  ≤3 s first-frame criterion has plenty of room, but the real number comes from Checkpoint 3.
+- **64 dropped frames (15%) is a worst case, not a forecast.** In that test the stick was
+  simultaneously capturing a canvas, encoding H.264 *and* decoding it, while compositing a 1080p
+  screen. In the real product the Fire TV only decodes, and the encoding happens on the PC.
+- **Not measured: 720p30 and 1080p30.** Check 4b raises the canvas to 1280x720@30, which says more
+  about the stick than 640x360 did. The 1080p30 criterion is still a Checkpoint 3 item.
 
 ## Checkpoint 3 — end-to-end acceptance (Fire TV)
 

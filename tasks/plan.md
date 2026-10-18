@@ -54,8 +54,10 @@ Tasks are recorded in full in `tasks/todo.md` (index below mirrors it).
       `navigator.mediaDevices`, which Silk hides
 - [x] `npm run lint && npm test && npm run build` green
 - [x] Review with human
-- [ ] Probe check 4 (capped WebRTC loopback, 640x360@15 → 720p30) run on the TV: the one remaining
-      unknown before Checkpoint 3. Not blocking Phase 2
+- [x] Probe check 4 (capped WebRTC loopback, 640x360@15) run on the TV: connected, `video/H264`
+      negotiated, first frame 942 ms, 420 of 450 frames painted — the "connects on paper only" risk
+      is closed
+- [ ] Probe check 4b (720p30) run on the TV. Not blocking Phase 2
 
 ### Phase 2 — Pairing and signaling
 - [ ] Task 5: Pairing store (PIN TTL, rotation, 3-strike lockout, single-use tokens) + unit tests
@@ -98,7 +100,7 @@ split work across sessions.
 | Risk | Impact | Mitigation |
 |---|---|---|
 | **Silk has no WebRTC** (the claim repeated all over the web) | Was High | **Answered by the probe, 2026-10-18**: Silk 144 has `RTCPeerConnection`. What it hides is `navigator.mediaDevices` — a TV has no camera or microphone — which is what sites really mean when they report "no WebRTC". The viewer is receive-only, so it never needs that object |
-| **A real Fire TV peer connection connects on paper but not in practice** (ICE/DTLS under Silk, accelerated rendering) | High | Probe check 4 (capped loopback, self-stopping) measures connect + first painted frame + negotiated codec + fps before Checkpoint 3. From this machine it cannot be verified — probe check 4 is the cheapest possible answer |
+| **A real Fire TV peer connection connects on paper but not in practice** (ICE/DTLS under Silk, accelerated rendering) | Was High | **Closed 2026-10-18**: probe check 4 connected and negotiated `video/H264` on the real device (first frame 942 ms). Remaining exposure is throughput at 1080p30, measured at Checkpoint 3 |
 | MSE chunk streaming as a fallback transport | — | **Rejected**: the loopback test froze the Fire TV hard (needed a power cycle) and this device cannot record an H.264 container. `SPEC.md` records the rejection; the probe keeps a capped, double-confirmed version of the test purely as evidence |
 | A Fire TV Stick cannot sustain 1080p30 | Med | Probe check 4 reports fps at 640x360@15, then at 720p30 on request, before any UI work; the quality selector defaults to 1080p and can drop to 720p; H.264 hardware decode is the main mitigation |
 | `audio: 'loopback'` produces silence on this Windows build | Med | Task 9 checks the track exists with sane `getSettings()`; real audibility at Checkpoint 3; degrade path to video-only is already specified |
