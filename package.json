@@ -7,11 +7,11 @@
   "description": "Local Wi-Fi screen + system audio mirroring for Fire TV and phones (Deskreen alternative)",
   "main": "dist/main/main.js",
   "scripts": {
-    "dev": "node scripts/dev.mjs",
+    "dev": "npm run build && node scripts/dev.mjs",
     "build:main": "tsc -p tsconfig.main.json",
     "build:web": "vite build",
     "build": "npm run build:main && npm run build:web",
-    "start": "npm run serve",
+    "start": "electron .",
     "serve": "node scripts/serve.mjs",
     "test": "node --test \"tests/**/*.test.ts\"",
     "coverage": "node --test --experimental-test-coverage \"tests/**/*.test.ts\"",
@@ -29,12 +29,14 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@types/ws": "^8.18.2",
+    "electron": "^44.9.0",
     "eslint": "^10.13.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.0",
     "vite": "^7.1.0"
   },
   "allowScripts": {
+    "electron@44.9.0": true,
     "esbuild@0.28.2": true
   }
 }

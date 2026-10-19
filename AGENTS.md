@@ -6,8 +6,8 @@ are secondary. Nothing ever leaves the local network — no STUN, no TURN, no cl
 
 `SPEC.md` (rev 5, approved) is the source of truth for behaviour, `tasks/plan.md` maps phases and
 checkpoints, `tasks/todo.md` holds the per-task acceptance criteria. Spec first, then tasks, then
-code — and keep all three in step with the code: commits name the spec task they implement. There
-is no README yet (that is Task 13).
+code — and keep all three in step with the code: commits name the spec task they implement.
+`README.md` was drafted early; Task 13 re-verifies it once the whole app runs.
 
 ## Commands
 
@@ -18,10 +18,10 @@ is no README yet (that is Task 13).
 - `npm run build` — `build:main` (`tsc -p tsconfig.main.json` → `dist/`) then `build:web`
   (vite → `dist/renderer`, `dist/viewer`).
 - `npm run serve` — standalone HTTP server on `:4680` (`PORT=` overrides), for the Fire TV.
-  It loads `dist/`, so build first. `npm start` currently aliases this (Task 8 points it at
-  Electron).
-- `npm run dev` — **does not work yet**: it spawns `npx electron`, and `electron` is not a
-  dependency until Task 8.
+  It loads `dist/`, so build first.
+- `npm start` — the Electron host shell against the existing `dist/` (build first).
+- `npm run dev` — one full build, then Vite `build --watch` + `npx electron .`; restart it after
+  main/preload edits because only the web bundles are watched.
 - `npm run lint` — `eslint . --max-warnings 0`. `docs/**` is ignored on purpose.
 
 ## Type checking stops short of the React apps
@@ -60,8 +60,17 @@ covers everything, currently clean) after touching those.
   and never buffered. `stop` closes both; a drop frees the seat and tells the host with `bye`.
 - `src/server/pairing.ts` is a pure store with the clock injected: PIN TTL/rotation/lockout,
   single-use tokens, one viewer seat. `src/server/lan.ts` is pure when handed an interface map.
-- The server is built, tested and usable before Electron exists (Tasks 1–7). `scripts/serve.mjs`
-  is what makes the Fire TV reachable today; `npm start` follows it.
+- `src/main/` is the Electron shell: `main.ts` starts the server, owns the host WebSocket (the boot
+  token never reaches the renderer), pushes `HostState`, and enforces the window security posture;
+  `display-media.ts` grants the chosen source; `ipc.ts` is the IPC surface; `src/shared/ipc.ts`
+  holds the typed contract and the IPC boundary guard.
+- `src/preload/preload.cts` must stay CommonJS (and compile to `preload.cjs`): a sandboxed preload
+  cannot be an ES module. It may `require("electron")` and nothing else.
+- Electron 44 reports `getDisplayMedia` to `setPermissionRequestHandler` as a **`media`** request,
+  not `display-capture`. The handler allows `media` only for the host page while a source is armed;
+  `setDisplayMediaRequestHandler` is the actual source gate. Camera/mic are denied otherwise.
+- The server is built, tested and usable without Electron (`scripts/serve.mjs`); `npm start` is the
+  shell around the same server.
 
 ## Non-negotiables
 

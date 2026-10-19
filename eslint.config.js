@@ -8,4 +8,9 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
     },
   },
+  {
+    // Sandboxed Electron preloads are CommonJS by design: `require("electron")` is the API.
+    files: ["**/*.cts"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
 );

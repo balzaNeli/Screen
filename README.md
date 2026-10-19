@@ -7,9 +7,9 @@ It exists for the case Deskreen makes awkward: an **Amazon Fire TV running Silk 
 remote** as the screen. Phones and tablets are supported, but every decision is made for the Fire
 TV first — keyboard-less, touch-less, camera-less, weak SoC — and must not break the others.
 
-> **Status: early.** The LAN server is written and tested: pairing, the WebSocket signalling relay
-> and the hardware probe page. The **Electron host app and the viewer UI are not built yet**, so
-> there is no release and no installer. See [Status](#status).
+> **Status: early.** The LAN server, pairing, signalling and the Electron host **shell** (window,
+> permissions, IPC, host socket) are written and tested. The **capture engine, viewer UI and host
+> UI are not built yet**, so there is no release and no installer. See [Status](#status).
 
 ## How it works
 
@@ -42,12 +42,15 @@ video and audio travel directly between the two devices.
 | LAN server: static serving, `/api/info`, `POST /api/pair`, `/ws` relay | **done**, suite green |
 | Pairing store: PIN TTL, rotation, 3-strike lockout, single-use tokens | **done** |
 | Probe page at `/probe` for real-hardware questions | **done**, and it decided the transport |
-| Electron host app: window, permissions, IPC, capture engine | **not written** (Tasks 8–9) |
+| Electron host shell: window, permissions, IPC, host socket | **done**, verified against the real window (Task 8) |
+| Host capture engine: `getDisplayMedia`, H.264, peer wiring | **not written** (Task 9) |
 | Viewer UI: PIN pad, `<video>`, remote controls, `?debug=1` | **stub** (Task 10) |
 | QR code, host UI (PIN + URLs + viewer list) | **not written** (Task 11) |
 
-What you can run today is the server, and it is worth running: the probe answers "will this TV
-work at all?" in about ten seconds, and the pairing endpoint can be exercised with `curl`.
+What you can run today: the server and the Electron shell. The probe answers "will this TV work at
+all?" in about ten seconds, and the pairing endpoint can be exercised with `curl`. The host window
+currently shows a placeholder page; its IPC surface (`window.mirror`) is ready to be driven from
+devtools.
 
 ## Requirements
 
@@ -62,6 +65,8 @@ work at all?" in about ten seconds, and the pairing endpoint can be exercised wi
 ```bash
 npm install
 npm run build        # compiles src/ to dist/ and bundles the two SPAs
+npm start            # Electron host shell (the host UI is still a stub until Task 11)
+# or, without Electron:
 npm run serve        # LAN server on :4680 (PORT=4681 to change), prints the PIN
 ```
 
@@ -89,8 +94,10 @@ Either way: `200 {"token":"…"}` · `401 {"error":"invalid_pin","attemptsLeft":
 `429 {"error":"locked","retryAfterMs":…}` · `409 {"error":"busy"}` ·
 `400 {"error":"bad_request"}` for a malformed body. Substitute the PIN the server printed.
 
-`npm run dev` and `npm start` become the app's entry points in Task 8; until the Electron
-dependency lands, `npm run serve` is what you want.
+`npm start` launches the Electron shell against the existing `dist/`; run `npm run build` first.
+`npm run dev` builds once, then rebuilds the web bundles on change and launches Electron
+(main/preload are not watched, so restart it after main-process edits). `npm run serve` keeps the
+server available without Electron, for probe and pairing checks.
 
 ## Commands
 
@@ -101,6 +108,8 @@ dependency lands, `npm run serve` is what you want.
 | `npm run coverage` | the same, with line/branch numbers |
 | `npm run lint` | `eslint . --max-warnings 0` — zero warnings allowed |
 | `npm run build` | `tsc` for main/preload/server → `dist/`, then Vite for the renderer and viewer |
+| `npm start` | the Electron host shell against the existing `dist/` (build first) |
+| `npm run dev` | build once, then rebuild the web bundles on change and launch Electron |
 | `npm run serve` | the LAN server alone, no Electron (`PORT=` overrides) |
 
 ## Privacy and security model
@@ -185,8 +194,9 @@ memory: it is where "it should work" gets replaced by a number.
 
 1. **Checkpoint 2** — protocol proven headlessly (done: two peers relay offer/answer/ICE through
    the real server; replayed token, foreign origin and a 4th failed PIN all rejected).
-2. **Task 8–11** — Electron shell (permissions, capture, IPC), the viewer UI, the host UI with the
-   QR code and the PIN.
+2. **Task 8–11** — Electron shell **done** (window, permissions, IPC, host socket); next the
+   capture engine (Task 9), the viewer UI (Task 10) and the host UI with the QR code and PIN
+   (Task 11).
 3. **Checkpoint 3** — end-to-end on the Fire TV: first frame within 3 s from a PIN typed with the
    remote, H.264 negotiated, audio audible and in sync, Stop ends playback in 1 s, and the
    resolution ladder measured 640x360 → 720p30 → 1080p30.

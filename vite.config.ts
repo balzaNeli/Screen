@@ -8,6 +8,9 @@ const entry = (p: string): string => fileURLToPath(new URL(p, import.meta.url));
 // ships host code.
 export default defineConfig({
   root: entry("./src"),
+  // The host page is loaded from file://, where absolute /assets URLs point at the disk root.
+  // Relative URLs work for both consumers: Electron's file:// and the server's /.
+  base: "./",
   esbuild: { jsx: "automatic" },
   build: {
     outDir: entry("./dist"),

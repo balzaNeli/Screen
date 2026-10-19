@@ -85,6 +85,30 @@ Consequences, now requirements:
    finding — it lowers the default quality.
 3. Check 4b is not re-run on this device; it now asks for a second confirming tap, like check 6.
 
+## Task 8 — Electron shell (2026-10-19, Windows 11 build 26200, Electron 44.9.0)
+
+Driven over the Chrome DevTools Protocol against the real `npm start` window and main process
+(remote debugging on 9222; no mocks, no browser automation framework).
+
+| Check | Result |
+|---|---|
+| Host page from `file://` | yes, `dist/renderer/index.html`; the meta CSP applies and Electron shows no security warning |
+| `window.mirror` | exactly the 8 functions in the SPEC code block (listSources, capabilities, start, setAudio, stop, onSignal, sendSignal, onState). SPEC prose says "9"; the block lists 8 |
+| Node backdoors | `require`, `process`, `module`, `fs` are all `undefined` in the renderer |
+| Permissions before capture | `getUserMedia` -> `NotAllowedError`; geolocation -> `User denied Geolocation`; no camera/mic grant |
+| Display capture | screen `1920x1080@30` plus a `"System audio"` loopback track; `start()` returned `{ audio: true }` |
+| Navigation | `window.open(...)` returns `null` (denied); assigning `location.href` leaves the `file://` URL unchanged |
+| Host socket + IPC relay | a viewer paired over HTTP; its offer arrived through `onSignal`; an answer from `sendSignal` reached the viewer |
+| State push | LAN URL + 6-digit PIN once a second; viewer join/leave reflected in `viewer`, audio state follows the selection |
+| `/api/info` from the LAN IP | `200` while the Electron app runs |
+| Window close | `window.close()` exits the app; the port is released |
+
+**Electron 44 permission detail:** `getDisplayMedia` reaches `setPermissionRequestHandler` as a
+`media` request, not `display-capture`. The handler allows `media` only for the host
+`webContents` while a source is armed, and `setDisplayMediaRequestHandler` remains the gate that
+chooses the source. Camera/microphone requests without an armed source are denied (verified);
+other permissions (`geolocation`, `hid`, `usb`, ...) are denied unconditionally.
+
 ## Checkpoint 3 — end-to-end acceptance (Fire TV)
 
 | # | Check | Result |

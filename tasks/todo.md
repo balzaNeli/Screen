@@ -2,10 +2,13 @@
 
 Source of truth: `SPEC.md` (rev 5, approved) and `tasks/plan.md`.
 
-**Progress:** Tasks 1–7 done — **Phase 2 and Checkpoint 2 complete** (35 tests green). **Checkpoint 1
-passed 2026-10-18 → transport is WebRTC in Silk (Branch A); the MSE alternative is rejected on
-evidence.** Probe check 4 also ran on the TV that day: connected, `video/H264` negotiated, first
-frame 942 ms. Next: Checkpoint 2 human review, then Task 8 (Electron shell).
+**Progress:** Tasks 1–8 done — Phases 1–2 and the Electron shell. Checkpoint 2 passed headlessly
+(37 tests green); **Checkpoint 1 passed 2026-10-18 → transport is WebRTC in Silk (Branch A); the MSE
+alternative is rejected on evidence.** Probe check 4 also ran on the TV that day: connected,
+`video/H264` negotiated, first frame 942 ms. The host shell (Task 8) was verified against the real
+window on 2026-10-19: preload surface, sandbox, permissions, display capture with loopback audio,
+IPC relay, navigation denial. Next: Task 9 (host capture engine). Checkpoint 2 human review and
+Checkpoint 3 remain human gates.
 
 **Definition of Done — every task:**
 - [ ] `npm test` passes (no new skips, no deleted assertions)
@@ -245,16 +248,23 @@ allow only `display-capture` for the host page, start the server, and bridge IPC
 and nothing else. Host UI stays on `file://`.
 
 **Acceptance criteria:**
-- [ ] App launches, loads the host page from `file://`, and `window.mirror` exposes only the documented functions
-- [ ] Renderer cannot reach `require`/`process`/`fs` (typed in devtools: all undefined)
-- [ ] `display-capture` is granted for the host page; `media`, `geolocation`, `usb` requests are denied
-- [ ] `start()` grants the selected source; with audio requested on a supported OS the returned stream has an audio track, and on an unsupported OS it returns video-only plus `{ audio: false }`
-- [ ] Clicking an external link or navigating does nothing (open handler and navigation denied)
+- [x] App launches, loads the host page from `file://`, and `window.mirror` exposes only the documented functions (8 in the SPEC code block; the prose says 9 — the block is the contract)
+- [x] Renderer cannot reach `require`/`process`/`fs` (typed in devtools: all undefined)
+- [x] `display-capture` is granted for the host page; `media`, `geolocation`, `usb` requests are denied (Electron 44 reports getDisplayMedia as a `media` request: allowed only for the host page while a source is armed, and the display-media handler still picks the source)
+- [x] `start()` grants the selected source; with audio requested on a supported OS the returned stream has an audio track, and on an unsupported OS it returns video-only plus `{ audio: false }` (Windows capture: 1920x1080@30 + "System audio"; the unsupported branch is the tested `audioModeFor` pure function)
+- [x] Clicking an external link or navigating does nothing (open handler and navigation denied)
 
 **Verification:**
-- [ ] Tests: `npm test` (pure helpers only — the Electron path is verified manually here)
-- [ ] Manual: devtools — call each `window.mirror` function, confirm source list, confirm no Node globals
-- [ ] Manual: `/api/info` reachable from the LAN while the app runs
+- [x] Tests: `npm test` (new: `tests/ipc.test.ts` — pure IPC boundary guard; the Electron path is verified manually)
+- [x] Manual: devtools — call each `window.mirror` function, confirm source list, confirm no Node globals
+- [x] Manual: `/api/info` reachable from the LAN while the app runs
+
+**Files as built:** `src/main/main.ts`, `src/main/display-media.ts`, `src/main/ipc.ts`,
+`src/preload/preload.cts` (CJS is required for a sandboxed preload; `.ts` → `.cts`),
+`src/renderer/index.html`, plus the extra pieces the shell needs: `src/shared/ipc.ts` (typed
+contract + IPC guard), `src/renderer/global.d.ts`, `tests/ipc.test.ts`, `vite.config.ts` (`base:
+"./"` for `file://`), `eslint.config.js` (CommonJS preload rule), `package.json` (Electron +
+scripts), `docs/manual-tests.md`.
 
 **Dependencies:** Checkpoint 2
 **Files:** `src/main/main.ts`, `src/main/display-media.ts`, `src/main/ipc.ts`,

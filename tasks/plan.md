@@ -71,7 +71,7 @@ Tasks are recorded in full in `tasks/todo.md` (index below mirrors it).
 - [ ] Human review before the Electron shell is written
 
 ### Phase 3 — First real frame (walking skeleton)
-- [ ] Task 8: Electron shell: security posture, permission handlers, Chromium switches, preload IPC
+- [x] Task 8: Electron shell: security posture, permission handlers, Chromium switches, preload IPC
 - [ ] Task 9: Host capture engine: `getDisplayMedia`, H.264 preference, quality/audio, peer wiring
 - [ ] Task 10: Viewer app: D-pad PIN pad, `<video>`, overlay controls, `?debug=1` stats
 
