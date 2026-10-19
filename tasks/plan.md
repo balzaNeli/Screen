@@ -68,11 +68,11 @@ Tasks are recorded in full in `tasks/todo.md` (index below mirrors it).
 - [x] Two fake peers complete offer/answer/ICE relay through the real server
 - [x] Replayed token, foreign origin, wrong/missing host token and the 4th failed PIN all rejected
 - [x] `npm run verify` green (35 tests)
-- [ ] Human review before the Electron shell is written
+- [x] Human review before the Electron shell is written (approved 2026-10-19)
 
 ### Phase 3 — First real frame (walking skeleton)
 - [x] Task 8: Electron shell: security posture, permission handlers, Chromium switches, preload IPC
-- [ ] Task 9: Host capture engine: `getDisplayMedia`, H.264 preference, quality/audio, peer wiring
+- [x] Task 9: Host capture engine: `getDisplayMedia`, H.264 preference, quality/audio, peer wiring
 - [ ] Task 10: Viewer app: D-pad PIN pad, `<video>`, overlay controls, `?debug=1` stats
 
 ### Checkpoint 3 — End-to-end on the Fire TV (blocking)

@@ -109,6 +109,34 @@ Driven over the Chrome DevTools Protocol against the real `npm start` window and
 chooses the source. Camera/microphone requests without an armed source are denied (verified);
 other permissions (`geolocation`, `hid`, `usb`, ...) are denied unconditionally.
 
+## Task 9 — host capture engine (2026-10-19, Windows 11 build 26200, Electron 44.9.0)
+
+Driven over CDP against the real host window, with a Node viewer socket paired through the real
+server and a fake `RTCPeerConnection` in the host renderer. The fake peer had its own `<video>`
+sink, so `getStats()` reflects a real decode. No Task 10 viewer and no TV were involved.
+
+| Check | Result |
+|---|---|
+| Offer order | first video payload `H264/90000`; VP8 and VP9 still offered as fallback; no codec filtered |
+| Peer configuration | wrapper observed exactly `[{"iceServers":[]}]` at construction; the engine also refuses a non-empty list at runtime |
+| Negotiated codec | fake peer `codecId` -> `video/H264`; host outbound `codecId` -> `video/H264` |
+| Resolution / frames | 1920x1080; fake peer decoded 10 frames; host `framesSent=10`, `framesEncoded=10`, `bytesSent=367787` |
+| Frame rate | 1 fps in both `getStats()` reports because the captured desktop was static; the live track reports 1920x1080@30 and the capture was capped at 30. This is not a throughput result — Checkpoint 3 measures that on the TV |
+| `contentHint` | `"detail"` on the captured video track |
+| Quality cap, live | 1080p -> 720p: track settings 1280x720@30, constraints `width.max=1280`, `height.max=720`, `frameRate.max=30`; back to 1080p: 1920x1080@30, same track, no new capture |
+| Audio off/on, live | inbound audio bytes over 1.5 s: 2625 on -> 35 off -> 2660 on again; `pc.connectionState` stayed `connected`; `HostState.audio` followed false/true |
+| Stop | video track `readyState` -> `ended`, preview cleared, viewer socket closed by the server, `HostState.audio` false |
+| Second start | new capture at 1920x1080@30 and a new offer, no app reload |
+| Start before the viewer | capture waits at "Capturing. Waiting for a viewer."; after a viewer paired and connected, the offer arrived. This is the SPEC user story order |
+| Audio-unsupported OS | **not run** — this host has Windows loopback. The branch is covered by `audioModeFor` unit tests and the main-process grant; it still needs a macOS/Linux run |
+| Unit tests | `npm test` 39 passing (2 new `videoConstraints` tests; existing `preferH264` coverage) |
+
+**Design note:** audio removal uses `replaceTrack(null)` on the sender held from the offer (the
+SPEC's fallback), not `removeTrack` + renegotiation. That is what keeps the video connection from
+glitching; the track is kept alive so `setAudio(true)` can restore it without a new SDP exchange.
+The first offer is also withheld until a viewer seat exists: main pushes `HostState.viewer`, and the
+engine offers on the join instead of sending an offer into an empty relay.
+
 ## Checkpoint 3 — end-to-end acceptance (Fire TV)
 
 | # | Check | Result |

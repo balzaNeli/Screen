@@ -50,7 +50,11 @@ covers everything, currently clean) after touching those.
 
 - `src/shared/` is runtime-free and pure — the only place testable without a browser or Electron:
   `protocol.ts` (`Signal` union + `parseSignal`, the boundary guard for anything off a socket),
-  `codecs.ts` (`preferH264`), `audio.ts` (`audioModeFor`), `rtc.ts` (`RTC_CONFIG`).
+  `codecs.ts` (`preferH264`), `audio.ts` (`audioModeFor`), `rtc.ts` (`RTC_CONFIG`),
+  `capture.ts` (`videoConstraints`, the quality caps applied with `applyConstraints`).
+- `src/renderer/mirror.ts` owns the host capture + peer connection: one `getDisplayMedia`, H.264
+  preference before the offer, first offer withheld until `HostState.viewer` is non-null, live audio
+  via `replaceTrack` on the held sender (no renegotiation), and `release()` on stop/bye/error.
 - `src/server/http.ts` is the entire LAN surface: viewer page at `/`, `/assets/*` through a
   containment check, `/api/info`, `/api/pair`, `/probe*` from a fixed-name allowlist
   (`PROBE_FILES`), and the `ws` upgrade for `/ws`. The host UI is deliberately **not** served

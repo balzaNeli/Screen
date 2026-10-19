@@ -2,13 +2,14 @@
 
 Source of truth: `SPEC.md` (rev 5, approved) and `tasks/plan.md`.
 
-**Progress:** Tasks 1–8 done — Phases 1–2 and the Electron shell. Checkpoint 2 passed headlessly
-(37 tests green); **Checkpoint 1 passed 2026-10-18 → transport is WebRTC in Silk (Branch A); the MSE
-alternative is rejected on evidence.** Probe check 4 also ran on the TV that day: connected,
-`video/H264` negotiated, first frame 942 ms. The host shell (Task 8) was verified against the real
-window on 2026-10-19: preload surface, sandbox, permissions, display capture with loopback audio,
-IPC relay, navigation denial. Next: Task 9 (host capture engine). Checkpoint 2 human review and
-Checkpoint 3 remain human gates.
+**Progress:** Tasks 1–9 implemented — Phases 1–2, the Electron shell and the host capture engine. Checkpoint
+2 passed headlessly (39 tests green); **Checkpoint 1 passed 2026-10-18 → transport is WebRTC in Silk
+(Branch A); the MSE alternative is rejected on evidence.** Probe check 4 also ran on the TV that
+day: connected, `video/H264` negotiated, first frame 942 ms. The host shell (Task 8) was verified
+against the real window on 2026-10-19; the capture engine (Task 9) was verified the same day with a
+real offer/answer, H.264, live quality/audio changes and a stop/restart cycle. The one open Task 9
+item is the audio-unsupported OS check, which needs a non-Windows host. Next: Task 10 (viewer app).
+**Checkpoint 3 remains the human gate.**
 
 **Definition of Done — every task:**
 - [ ] `npm test` passes (no new skips, no deleted assertions)
@@ -230,7 +231,7 @@ debugging before Electron exists.
 - [x] Two fake peers complete offer/answer/ICE relay through the real server
 - [x] Replayed token, foreign origin, wrong host token, missing token and the 4th failed PIN all rejected with the right codes (`1008` / `429`)
 - [x] `npm run verify` green, zero suppressions, no test skipped or deleted
-- [ ] Human review before the Electron shell is written (Task 8) — coverage on shared + pairing ≥ 80% is checked at Task 14
+- [x] Human review before the Electron shell is written (Task 8) — approved 2026-10-19; coverage on shared + pairing ≥ 80% is still checked at Task 14
 
 ---
 
@@ -287,17 +288,24 @@ codec is H.264 rather than unknown. Everything else is as described.
 (tracks stopped, pc closed, ICE sent to the viewer first).
 
 **Acceptance criteria:**
-- [ ] Offer SDP contains H.264 as the first video payload type; VP8/VP9 still present as fallback
-- [ ] The peer connection uses `iceServers: []` (asserted at runtime, not only in the constant)
-- [ ] Quality selection caps the resolution via `applyConstraints` without restarting capture
-- [ ] `setAudio(false)` removes the track live; `setAudio(true)` restores it; no re-negotiation glitch that drops video
-- [ ] `stop()` stops every track and closes the pc; a second `start()` works without reloading the app
-- [ ] Audio-unsupported OS: `start()` succeeds, video flows, `HostState.audio === false`
+- [x] Offer SDP contains H.264 as the first video payload type; VP8/VP9 still present as fallback
+- [x] The peer connection uses `iceServers: []` (asserted at runtime, not only in the constant)
+- [x] Quality selection caps the resolution via `applyConstraints` without restarting capture
+- [x] `setAudio(false)` removes the track live; `setAudio(true)` restores it; no re-negotiation glitch that drops video
+- [x] `stop()` stops every track and closes the pc; a second `start()` works without reloading the app
+- [ ] Audio-unsupported OS: `start()` succeeds, video flows, `HostState.audio === false` — **not run**: this host has Windows loopback; needs a macOS/Linux run (code path implemented)
 
 **Verification:**
-- [ ] Tests: `npm test` (pure SDP/codec-order helper)
-- [ ] Manual: devtools — inspect `getStats()` for `codecId`/`framesPerSecond` locally before any TV test
-- [ ] Manual: verify with a fake peer in the same browser session that offer/answer completes
+- [x] Tests: `npm test` (pure SDP/codec-order helper)
+- [x] Manual: devtools — inspect `getStats()` for `codecId`/`framesPerSecond` locally before any TV test
+- [x] Manual: verify with a fake peer in the same browser session that offer/answer completes
+
+**Files as built:** `src/renderer/mirror.ts`, `src/renderer/App.tsx`, `src/renderer/main.tsx`, plus
+`src/shared/capture.ts` and `tests/capture.test.ts` (the pure quality-cap helper was not in the
+planned file list). The engine withholds the first offer until `HostState.viewer` is non-null, so the
+SPEC order ("pick a screen, a viewer joins") does not drop the offer. Audio uses
+`replaceTrack(null)`/`replaceTrack(track)` on the sender held from the offer (the SPEC fallback), so
+the live toggle never renegotiates. Evidence is in `docs/manual-tests.md`.
 
 **Dependencies:** Task 8
 **Files:** `src/renderer/mirror.ts`, `src/renderer/App.tsx`, `src/renderer/main.tsx`

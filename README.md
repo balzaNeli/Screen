@@ -43,14 +43,14 @@ video and audio travel directly between the two devices.
 | Pairing store: PIN TTL, rotation, 3-strike lockout, single-use tokens | **done** |
 | Probe page at `/probe` for real-hardware questions | **done**, and it decided the transport |
 | Electron host shell: window, permissions, IPC, host socket | **done**, verified against the real window (Task 8) |
-| Host capture engine: `getDisplayMedia`, H.264, peer wiring | **not written** (Task 9) |
+| Host capture engine: `getDisplayMedia`, H.264, peer wiring | **done**, verified with a fake peer (Task 9) |
 | Viewer UI: PIN pad, `<video>`, remote controls, `?debug=1` | **stub** (Task 10) |
 | QR code, host UI (PIN + URLs + viewer list) | **not written** (Task 11) |
 
-What you can run today: the server and the Electron shell. The probe answers "will this TV work at
-all?" in about ten seconds, and the pairing endpoint can be exercised with `curl`. The host window
-currently shows a placeholder page; its IPC surface (`window.mirror`) is ready to be driven from
-devtools.
+What you can run today: the server, the Electron shell and the host capture harness. The probe
+answers "will this TV work at all?" in about ten seconds, and the pairing endpoint can be exercised
+with `curl`. The host window can pick a screen, preview it and negotiate with a viewer over
+`window.mirror`; the real viewer UI and the final host UI are Tasks 10 and 11.
 
 ## Requirements
 
@@ -65,7 +65,7 @@ devtools.
 ```bash
 npm install
 npm run build        # compiles src/ to dist/ and bundles the two SPAs
-npm start            # Electron host shell (the host UI is still a stub until Task 11)
+npm start            # Electron host shell (temporary capture harness until Task 11)
 # or, without Electron:
 npm run serve        # LAN server on :4680 (PORT=4681 to change), prints the PIN
 ```
@@ -194,9 +194,9 @@ memory: it is where "it should work" gets replaced by a number.
 
 1. **Checkpoint 2** — protocol proven headlessly (done: two peers relay offer/answer/ICE through
    the real server; replayed token, foreign origin and a 4th failed PIN all rejected).
-2. **Task 8–11** — Electron shell **done** (window, permissions, IPC, host socket); next the
-   capture engine (Task 9), the viewer UI (Task 10) and the host UI with the QR code and PIN
-   (Task 11).
+2. **Task 8–11** — Electron shell and capture engine **done** (window, permissions, IPC, host
+   socket, H.264 preference, live quality/audio); next the viewer UI (Task 10) and the host UI with
+   the QR code and PIN (Task 11).
 3. **Checkpoint 3** — end-to-end on the Fire TV: first frame within 3 s from a PIN typed with the
    remote, H.264 negotiated, audio audible and in sync, Stop ends playback in 1 s, and the
    resolution ladder measured 640x360 → 720p30 → 1080p30.
