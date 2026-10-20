@@ -55,6 +55,12 @@ covers everything, currently clean) after touching those.
 - `src/renderer/mirror.ts` owns the host capture + peer connection: one `getDisplayMedia`, H.264
   preference before the offer, first offer withheld until `HostState.viewer` is non-null, live audio
   via `replaceTrack` on the held sender (no renegotiation), and `release()` on stop/bye/error.
+- `src/viewer/main.tsx` owns the pair flow: `takePin` (`src/viewer/pin.ts`) reads `?p=` once,
+  `history.replaceState` scrubs it, then `/api/info` + `/api/pair` and the PIN→Watch switch.
+  `PinPad.tsx` is buttons only; `Watch.tsx` is the receive-only answerer — it never offers, queues
+  ICE until `setRemoteDescription`, and owns mute/fullscreen/stop plus the `?debug=1` stats. All
+  styling is `viewer.css`; the server CSP blocks inline styles/scripts. After a failed attempt,
+  `PinPad` restores focus to "1" from an effect: at handler time React still has the keys disabled.
 - `src/server/http.ts` is the entire LAN surface: viewer page at `/`, `/assets/*` through a
   containment check, `/api/info`, `/api/pair`, `/probe*` from a fixed-name allowlist
   (`PROBE_FILES`), and the `ws` upgrade for `/ws`. The host UI is deliberately **not** served
@@ -81,6 +87,8 @@ covers everything, currently clean) after touching those.
 - **The viewer is receive-only.** Never `getUserMedia`, `getDisplayMedia`, a permission request or
   a `navigator.mediaDevices` feature test — Silk on Fire TV hides that object (no camera/mic), and
   that hidden object is why the web believes "Silk has no WebRTC". It does.
+- **The viewer PIN pad is buttons, not an `<input>`.** An input would summon Silk's on-screen
+  keyboard, which breaks the remote-only flow.
 - **No STUN/TURN, ever.** `RTC_CONFIG.iceServers` stays empty and frozen. Task 14 adds the grep
   gate to `npm run verify`; until then it is enforced by review.
 - **Strict CSP on every response** (`src/server/http.ts`), so no served page may use inline

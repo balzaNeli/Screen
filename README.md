@@ -7,9 +7,9 @@ It exists for the case Deskreen makes awkward: an **Amazon Fire TV running Silk 
 remote** as the screen. Phones and tablets are supported, but every decision is made for the Fire
 TV first — keyboard-less, touch-less, camera-less, weak SoC — and must not break the others.
 
-> **Status: early.** The LAN server, pairing, signalling and the Electron host **shell** (window,
-> permissions, IPC, host socket) are written and tested. The **capture engine, viewer UI and host
-> UI are not built yet**, so there is no release and no installer. See [Status](#status).
+> **Status: early.** The LAN server, pairing, signalling, the Electron host **shell**, the
+> capture engine and the **viewer app** are written and tested. The final host UI (the URL/PIN/QR
+> panel) is still Task 11, so there is no release or installer. See [Status](#status).
 
 ## How it works
 
@@ -44,13 +44,14 @@ video and audio travel directly between the two devices.
 | Probe page at `/probe` for real-hardware questions | **done**, and it decided the transport |
 | Electron host shell: window, permissions, IPC, host socket | **done**, verified against the real window (Task 8) |
 | Host capture engine: `getDisplayMedia`, H.264, peer wiring | **done**, verified with a fake peer (Task 9) |
-| Viewer UI: PIN pad, `<video>`, remote controls, `?debug=1` | **stub** (Task 10) |
+| Viewer UI: PIN pad, `<video>`, remote controls, `?debug=1` | **done**, verified in Edge against the real host (Task 10) |
 | QR code, host UI (PIN + URLs + viewer list) | **not written** (Task 11) |
 
-What you can run today: the server, the Electron shell and the host capture harness. The probe
-answers "will this TV work at all?" in about ten seconds, and the pairing endpoint can be exercised
-with `curl`. The host window can pick a screen, preview it and negotiate with a viewer over
-`window.mirror`; the real viewer UI and the final host UI are Tasks 10 and 11.
+What you can run today: the server, the Electron shell, the host capture harness and the viewer.
+The viewer walks the full pair → stream → mute/fullscreen/stop cycle in a desktop browser, and the
+pairing endpoint can be exercised with `curl`. The host window still uses the Task 9 capture
+harness; it does not show the URL or PIN until Task 11, so pairing today is a dev flow (the values
+are in `HostState`).
 
 ## Requirements
 
@@ -70,8 +71,10 @@ npm start            # Electron host shell (temporary capture harness until Task
 npm run serve        # LAN server on :4680 (PORT=4681 to change), prints the PIN
 ```
 
-Then, from the Fire TV's browser: `http://<lan-ip>:4680/probe` — the server prints the exact URL.
-The probe runs its safe checks (1–4) from a single button.
+Then, from the Fire TV's browser: `http://<lan-ip>:4680/` is the viewer (enter the PIN), and
+`http://<lan-ip>:4680/probe` is the hardware probe. The server prints the exact URL. The probe runs
+its safe checks (1–4) from a single button. Task 11 will put the viewer URL and the PIN in the host
+window; until then, read them from `HostState` in devtools.
 
 The pairing endpoint, by hand:
 
@@ -193,14 +196,15 @@ memory: it is where "it should work" gets replaced by a number.
 ## Roadmap
 
 1. **Checkpoint 2** — protocol proven headlessly (done: two peers relay offer/answer/ICE through
-   the real server; replayed token, foreign origin and a 4th failed PIN all rejected).
-2. **Task 8–11** — Electron shell and capture engine **done** (window, permissions, IPC, host
-   socket, H.264 preference, live quality/audio); next the viewer UI (Task 10) and the host UI with
-   the QR code and PIN (Task 11).
+   the real server; replayed token, foreign origin and three failed PINs (lockout) all rejected).
+2. **Tasks 8–10** — Electron shell, capture engine and viewer app **done** (window, permissions,
+   IPC, host socket, H.264 preference, live quality/audio; D-pad PIN pad, stream, controls and
+   `?debug=1`).
 3. **Checkpoint 3** — end-to-end on the Fire TV: first frame within 3 s from a PIN typed with the
    remote, H.264 negotiated, audio audible and in sync, Stop ends playback in 1 s, and the
    resolution ladder measured 640x360 → 720p30 → 1080p30.
-4. **Task 12–14** — packaging, the README you are reading, and the constraint gates in `verify`.
+4. **Tasks 11–14** — host UI with the QR code and PIN, viewer polish, security/README pass, and the
+   coverage + constraint gates in `verify`.
 
 ## Repository map
 

@@ -137,6 +137,38 @@ glitching; the track is kept alive so `setAudio(true)` can restore it without a 
 The first offer is also withheld until a viewer seat exists: main pushes `HostState.viewer`, and the
 engine offers on the join instead of sending an offer into an empty relay.
 
+## Task 10 — viewer app (2026-10-19, Windows 11 build 26200, Electron 44.9.0, Edge 155)
+
+The viewer at `http://127.0.0.1:4680/` was driven over CDP against the real Electron host and the
+real signalling server; the host captured the full 1920x1080 desktop. No TV or phone was involved.
+Edge was launched with `--disable-features=CalculateNativeWinOcclusion
+--disable-background-timer-throttling --disable-backgrounding-occluded-windows
+--disable-renderer-backgrounding` because a covered/background tab throttles timers and does not
+paint `:focus`; both are artifacts of testing a viewer in a desktop tab, not of the foreground TV.
+
+| Check | Result |
+|---|---|
+| QR link / URL scrub | `?p=<pin>&debug=1` → six slots prefilled; address bar `/?debug=1`; `history.state === null`. `replaceState` replaces the entry, so the `?p=` URL is never a Back target |
+| No virtual keyboard | `document.querySelectorAll("input").length === 0` on the pad, before and after failed attempts |
+| Keyboard-only pairing | prefilled PIN: focus is on Connect, Enter pairs. Empty pad: focus is on "1", Tab + Enter enters digits (desktop Chrome has no D-pad spatial navigation; Silk's arrow model is Checkpoint 3 item 4) |
+| Pair → stream | Enter → real offer/answer through the server; `<video>` playing at 1920x1080, unmuted because the Enter was a user gesture; host `HostState.viewer` set |
+| `?debug=1` | `codec video/H264`, `video 1920x1080`, fps 0–34 on a static desktop, moving bitrate and audio level; not the TV throughput result |
+| Mute / Sound | button toggles `video.muted` true/false; `srcObject` and playback survive |
+| Fullscreen | enters and exits with a real click; `document.fullscreenElement` follows |
+| Controls | hide after 5 s, any key brings them back; focused button shows a 4 px white outline (measured with CDP focus emulation, because a background page does not paint `:focus`) |
+| Viewer Stop | sends `stop`, closes peer/socket, returns to the pad with "You stopped watching."; the consumed QR PIN is not prefilled again (empty pad, focus "1"); host Ready and seat free, no reload |
+| Host Stop | viewer shows "The host stopped sharing." and returns to the pad; host Ready |
+| Wrong PIN / lockout | 000000 typed with Tab + Enter only: "Wrong PIN. 2 attempts left." → "1 attempt left" → "Too many attempts. Try again in 60 s."; keys disabled; the 6th digit auto-submits |
+| Focus after failure | found a race: `focus()` ran while React still had the keys disabled, so focus could leave the pad. The restore now runs in an effect keyed on a reset tick; retest lands on "1" every time |
+| Receive-only grep | no `getUserMedia`, `getDisplayMedia`, `navigator.mediaDevices`, permission call, inline style or `innerHTML` in `src/viewer` |
+| CSP / styling | the only stylesheet is the built `/assets/viewer-*.css`; no inline `<script>`/`<style>`; the page renders under the server's `default-src 'self'` |
+| Tests | `npm test`: 4 new `pin.ts` tests (pad reducer, completion, scrub, invalid/missing `p`), 43 total; `npm run verify` green; `npx tsc -p tsconfig.json` clean |
+
+**Not verified here:** first-frame latency, real D-pad arrow navigation, 1080p30 throughput,
+hardware decode and audible audio on the Fire TV — all Checkpoint 3. The viewer attempts unmuted
+playback because Enter was a trusted gesture; when autoplay refuses it falls back to muted with the
+Sound control, which is the path a TV may take.
+
 ## Checkpoint 3 — end-to-end acceptance (Fire TV)
 
 | # | Check | Result |
@@ -152,7 +184,7 @@ engine offers on the join instead of sending an offer into an empty relay.
 | 9 | Viewer mute button silences and restores | |
 | 10 | Host audio toggle mid-session stops viewer audio within 1 s | |
 | 11 | Host Stop ends playback within 1 s; viewer shows "host stopped" | |
-| 12 | Wrong PIN → error text; 4th attempt shows lockout time | |
+| 12 | Wrong PIN → error text; the third failure shows the 60 s lockout time | |
 | 13 | Re-pair after Stop works without reloading the viewer | |
 | 14 | Wi-Fi drop → reconnect prompt appears, re-pair succeeds | |
 | 15 | Fire TV Back exits the viewer without leaving a stalled stream | |

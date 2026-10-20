@@ -73,7 +73,7 @@ Tasks are recorded in full in `tasks/todo.md` (index below mirrors it).
 ### Phase 3 — First real frame (walking skeleton)
 - [x] Task 8: Electron shell: security posture, permission handlers, Chromium switches, preload IPC
 - [x] Task 9: Host capture engine: `getDisplayMedia`, H.264 preference, quality/audio, peer wiring
-- [ ] Task 10: Viewer app: D-pad PIN pad, `<video>`, overlay controls, `?debug=1` stats
+- [x] Task 10: Viewer app: D-pad PIN pad, `<video>`, overlay controls, `?debug=1` stats
 
 ### Checkpoint 3 — End-to-end on the Fire TV (blocking)
 - [ ] First frame within 3 s of PIN submission, remote-only pairing, no on-screen keyboard

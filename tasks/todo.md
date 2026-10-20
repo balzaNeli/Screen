@@ -2,14 +2,17 @@
 
 Source of truth: `SPEC.md` (rev 5, approved) and `tasks/plan.md`.
 
-**Progress:** Tasks 1–9 implemented — Phases 1–2, the Electron shell and the host capture engine. Checkpoint
-2 passed headlessly (39 tests green); **Checkpoint 1 passed 2026-10-18 → transport is WebRTC in Silk
-(Branch A); the MSE alternative is rejected on evidence.** Probe check 4 also ran on the TV that
-day: connected, `video/H264` negotiated, first frame 942 ms. The host shell (Task 8) was verified
-against the real window on 2026-10-19; the capture engine (Task 9) was verified the same day with a
-real offer/answer, H.264, live quality/audio changes and a stop/restart cycle. The one open Task 9
-item is the audio-unsupported OS check, which needs a non-Windows host. Next: Task 10 (viewer app).
-**Checkpoint 3 remains the human gate.**
+**Progress:** Tasks 1–10 implemented — Phases 1–2, the Electron shell, the host capture engine and
+the viewer app. Checkpoint 2 passed headlessly (39 tests green); **Checkpoint 1 passed 2026-10-18 →
+transport is WebRTC in Silk (Branch A); the MSE alternative is rejected on evidence.** Probe check
+4 also ran on the TV that day: connected, `video/H264` negotiated, first frame 942 ms. The host
+shell (Task 8) was verified against the real window on 2026-10-19; the capture engine (Task 9) was
+verified the same day with a real offer/answer, H.264, live quality/audio changes and a
+stop/restart cycle. The viewer (Task 10) was verified in Edge 155 against the real Electron host:
+QR prefill and URL scrub, keyboard pairing, a 1920x1080 H.264 stream, mute, fullscreen, auto-hide,
+viewer/host stop, wrong PIN and lockout. `npm run verify` is green (43 tests). The one open Task 9
+item is the audio-unsupported OS check, which needs a non-Windows host. Next: **Checkpoint 3 on the
+Fire TV**, then Task 11. **Checkpoint 3 remains the human gate.**
 
 **Definition of Done — every task:**
 - [ ] `npm test` passes (no new skips, no deleted assertions)
@@ -331,17 +334,27 @@ and audio level from `getStats()`. `?p=` prefills the PIN and is scrubbed with
 `history.replaceState`. 10-foot sizing with a 5% safe-area inset.
 
 **Acceptance criteria:**
-- [ ] Pairing is completable with arrow keys + Enter only; no element summons a virtual keyboard
-- [ ] Enter on the 6th digit submits; wrong PIN shows the server's error text; lockout shows the retry time
-- [ ] Stream renders, mute toggles audio, fullscreen works, `?debug=1` reports the negotiated codec
-- [ ] Blurred focus is always visible (≥4 px outline) on every control
-- [ ] After load with `?p=`, the PIN is gone from the address bar and from `history.length` navigation
-- [ ] No viewer file references `getUserMedia`, `getDisplayMedia`, `navigator.mediaDevices` or any permission API (grep gate — receive-only on a camera-less device)
+- [x] Pairing is completable with arrow keys + Enter only; no element summons a virtual keyboard (desktop keyboard-only used Tab + Enter; Silk's D-pad spatial navigation is the same focus model and is Checkpoint 3 item 4)
+- [x] Enter on the 6th digit submits; wrong PIN shows the server's error text; lockout shows the retry time (typed 000000 with the keyboard: 2 left → 1 left → 60 s lockout)
+- [x] Stream renders, mute toggles audio, fullscreen works, `?debug=1` reports the negotiated codec (`video/H264`, 1920x1080 against the real host)
+- [x] Blurred focus is always visible (≥4 px outline) on every control (4 px white ring; a failed attempt now restores focus to "1" in an effect, after the keys re-enable)
+- [x] After load with `?p=`, the PIN is gone from the address bar and from `history.length` navigation (`history.replaceState`; `history.state === null`, and the `?p=` entry is replaced rather than pushed)
+- [x] No viewer file references `getUserMedia`, `getDisplayMedia`, `navigator.mediaDevices` or any permission API (grep gate — receive-only on a camera-less device; no matches in `src/viewer`)
 
 **Verification:**
-- [ ] Tests: `npm test` (PIN-pad state machine and URL scrubbing as pure helpers)
-- [ ] Manual: desktop Chrome — full pair → stream → mute → stop cycle with a fake or real host
-- [ ] Manual: keyboard-only pass (no mouse) on the same flow
+- [x] Tests: `npm test` (4 new `pin.ts` tests; 43 passing total)
+- [x] Manual: desktop Chrome — full pair → stream → mute → fullscreen → stop cycle against the real Electron host (Edge 155), plus host Stop, wrong PIN and lockout
+- [x] Manual: keyboard-only pass (no mouse) — Enter on the prefilled Connect, and Tab + Enter for the wrong-PIN attempts
+
+**Files as built:** `src/viewer/pin.ts` (pure pad reducer + `takePin` URL scrub) and
+`tests/pin.test.ts` were added beyond the planned list. All viewer styling is in `viewer.css`
+(the server CSP forbids inline styles/scripts). `PinPad` is buttons only — an `<input>` would summon
+Silk's on-screen keyboard. `Watch` answers the host's offer, never creates one, queues ICE until
+`setRemoteDescription` and runs the mute/fullscreen/stop controls plus the `?debug=1` stats. A
+failed pairing restores focus to "1" from a state effect, not from the handler: at handler time
+React still had the keys disabled, so `focus()` could leave the pad. After any session end, the
+consumed QR PIN is dropped from the prefill so the next pairing starts on an empty pad. Evidence is
+in `docs/manual-tests.md`.
 
 **Dependencies:** Task 9
 **Files:** `src/viewer/index.html`, `src/viewer/main.tsx`, `src/viewer/PinPad.tsx`,
