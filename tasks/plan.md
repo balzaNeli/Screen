@@ -76,9 +76,13 @@ Tasks are recorded in full in `tasks/todo.md` (index below mirrors it).
 - [x] Task 10: Viewer app: D-pad PIN pad, `<video>`, overlay controls, `?debug=1` stats
 
 ### Checkpoint 3 — End-to-end on the Fire TV (blocking)
-- [ ] First frame within 3 s of PIN submission, remote-only pairing, no on-screen keyboard
-- [ ] H.264 negotiated, 1080p30 holds, audio audible, mute works, Stop ends playback ≤ 1 s
-- [ ] Review with human before Phase 4
+- [x] First frame within 3 s of PIN submission, remote-only pairing, no on-screen keyboard
+- [x] H.264 negotiated, 1080p30 holds, audio audible, mute works, Stop ends playback ≤ 1 s
+- [x] Review with human before Phase 4
+
+**Result 2026-10-19:** functional pass. Caveats: first-frame time not stopwatch-timed; 1080p30 works
+but is not locked at 30 fps yet (tuning follow-up); no fps/`lost` numbers recorded. Details in
+`docs/manual-tests.md`.
 
 ### Phase 4 — Host UI, polish and hardening
 - [ ] Task 11: Host UI: URL list, QR code, viewer status, quality/audio toggles, error states

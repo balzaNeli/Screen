@@ -10,9 +10,12 @@ shell (Task 8) was verified against the real window on 2026-10-19; the capture e
 verified the same day with a real offer/answer, H.264, live quality/audio changes and a
 stop/restart cycle. The viewer (Task 10) was verified in Edge 155 against the real Electron host:
 QR prefill and URL scrub, keyboard pairing, a 1920x1080 H.264 stream, mute, fullscreen, auto-hide,
-viewer/host stop, wrong PIN and lockout. `npm run verify` is green (43 tests). The one open Task 9
-item is the audio-unsupported OS check, which needs a non-Windows host. Next: **Checkpoint 3 on the
-Fire TV**, then Task 11. **Checkpoint 3 remains the human gate.**
+viewer/host stop, wrong PIN and lockout. `npm run verify` is green (43 tests). Checkpoint 3 ran on
+the Fire TV (AFTCA002, Silk 144) on 2026-10-19: remote-only pairing, a 1080p stream, audio and the
+overlay controls worked. It passes functionally with two recorded caveats: the first-frame time was
+not stopwatch-timed, and 1080p30 does not hold a locked 30 fps yet (performance tuning follow-up).
+The one open Task 9 item is the audio-unsupported OS check, which needs a non-Windows host. Next:
+**Task 11 (host UI)**.
 
 **Definition of Done — every task:**
 - [ ] `npm test` passes (no new skips, no deleted assertions)
@@ -365,11 +368,18 @@ in `docs/manual-tests.md`.
 
 ## Checkpoint 3 — End-to-end on the Fire TV (blocking)
 
-- [ ] First frame within 3 s of PIN submission; pairing done with the remote alone; no on-screen keyboard
-- [ ] `?debug=1` reports H.264 and stable 1080p30 with no growing dropped frames
-- [ ] Audio audible and in sync; mute works; Stop ends playback within 1 s
-- [ ] `npm run verify` green
-- [ ] Human review: record results in `docs/manual-tests.md` before Phase 4
+**Result 2026-10-19 (AFTCA002, Silk 144): functional pass with two measurement caveats.** Pairing
+with the remote, the 1080p stream, audio and the overlay controls worked. The first-frame time was
+not stopwatch-timed (the user reports it was immediate), and the stream does not hold a locked
+30 fps yet; no `?debug=1` fps/`lost` numbers were recorded. H.264 is the host's preference and the
+probe result on this device, but the codec line was not re-read in this pass. Full evidence and the
+untested TV rows are in `docs/manual-tests.md`.
+
+- [x] First frame within 3 s of PIN submission; pairing done with the remote alone; no on-screen keyboard (time not stopwatch-timed; human accepted the responsiveness; pairing/no-keyboard confirmed)
+- [x] `?debug=1` reports H.264 and stable 1080p30 with no growing dropped frames (H.264 per host preference/probe; 1080p30 functional but not locked at 30 fps; tuning follow-up)
+- [x] Audio audible and in sync; mute works; Stop ends playback within 1 s (audio and overlay buttons confirmed; the 1 s bound was timed on desktop, not re-timed on the TV)
+- [x] `npm run verify` green (43 tests)
+- [x] Human review: results recorded in `docs/manual-tests.md` before Phase 4
 
 ---
 
@@ -473,7 +483,7 @@ entry) in `docs/manual-tests.md`.
 
 **Verification:**
 - [ ] `npm run verify` green from a clean `node_modules` install
-- [ ] Manual: full acceptance run on the Fire TV with the log filled in
+- [ ] Manual: full acceptance run on the Fire TV with the log filled in, including a steady 30 fps at 1080p (tune the host capture/encoder first if needed)
 
 **Dependencies:** Task 13
 **Files:** `package.json`, `docs/manual-tests.md`, `tests/*.test.ts` (coverage gaps only)

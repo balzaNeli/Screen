@@ -44,7 +44,7 @@ video and audio travel directly between the two devices.
 | Probe page at `/probe` for real-hardware questions | **done**, and it decided the transport |
 | Electron host shell: window, permissions, IPC, host socket | **done**, verified against the real window (Task 8) |
 | Host capture engine: `getDisplayMedia`, H.264, peer wiring | **done**, verified with a fake peer (Task 9) |
-| Viewer UI: PIN pad, `<video>`, remote controls, `?debug=1` | **done**, verified in Edge against the real host (Task 10) |
+| Viewer UI: PIN pad, `<video>`, remote controls, `?debug=1` | **done**, verified in Edge and on the Fire TV (Task 10 / Checkpoint 3) |
 | QR code, host UI (PIN + URLs + viewer list) | **not written** (Task 11) |
 
 What you can run today: the server, the Electron shell, the host capture harness and the viewer.
@@ -200,9 +200,9 @@ memory: it is where "it should work" gets replaced by a number.
 2. **Tasks 8–10** — Electron shell, capture engine and viewer app **done** (window, permissions,
    IPC, host socket, H.264 preference, live quality/audio; D-pad PIN pad, stream, controls and
    `?debug=1`).
-3. **Checkpoint 3** — end-to-end on the Fire TV: first frame within 3 s from a PIN typed with the
-   remote, H.264 negotiated, audio audible and in sync, Stop ends playback in 1 s, and the
-   resolution ladder measured 640x360 → 720p30 → 1080p30.
+3. **Checkpoint 3** — end-to-end on the Fire TV: **functionally passed 2026-10-19** (remote-only
+   pairing, 1080p stream, audio and overlay controls); first-frame timing and a locked 1080p30
+   remain measurement/tuning follow-ups.
 4. **Tasks 11–14** — host UI with the QR code and PIN, viewer polish, security/README pass, and the
    coverage + constraint gates in `verify`.
 

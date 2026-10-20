@@ -171,6 +171,29 @@ Sound control, which is the path a TV may take.
 
 ## Checkpoint 3 — end-to-end acceptance (Fire TV)
 
+**Result 2026-10-19 (AFTCA002, Silk 144): functional pass with two measurement caveats.**
+
+The host (Electron 44.9.0, Windows 11, `192.168.15.6`) captured the full screen at 1080p with system
+audio on. The viewer at `/?debug=1` paired with the PIN typed on the remote and streamed.
+
+- Pairing / remote-only: pass; the pad has no `<input>`, so no on-screen keyboard appeared.
+- Stream: 1080p30 worked, but it does not hold a locked 30 fps yet; no 2-minute fps/`lost` numbers
+  were recorded. Tuning follow-up.
+- Audio: audible; mute and the overlay buttons worked.
+- First frame: not stopwatch-timed; the user reports the start was immediate. The ≤ 3 s threshold is
+  still unmeasured.
+- Codec: not read from `?debug=1` in this pass; the host prefers H.264 and probe check 4 negotiated
+  `video/H264` on this device.
+- `npm run verify`: green (43 tests).
+
+**Not exercised on the TV in this pass:** host window URL/PIN/QR (Task 11), glass-to-glass latency,
+the 2-minute 640x360 → 720p30 → 1080p30 ladder, host audio toggle mid-session, wrong PIN/lockout,
+re-pair after Stop, Wi-Fi drop, Back. The Task 10 desktop run covers PIN/lockout and Stop; the
+TV-specific rows stay open for the final acceptance.
+
+**Follow-up:** tune 1080p30 to a steady 30 fps under motion and re-measure `fps`/`lost` with
+`?debug=1`; performance polish, not a transport failure.
+
 | # | Check | Result |
 |---|---|---|
 | 1 | Host window shows every LAN URL and a 6-digit PIN | |
