@@ -16,10 +16,28 @@ export type Mirror = {
   start: (request: StartRequest) => Promise<MirrorResult>;
   stop: () => void;
   setAudio: (on: boolean) => Promise<boolean>;
-  setQuality: (quality: Quality) => Promise<void>;
+  setQuality: (quality: Quality) => Promise<boolean>;
   handleSignal: (signal: Signal) => void;
   onChange: (listener: (state: MirrorState) => void) => void;
 };
+
+/** Browser capture errors are DOMExceptions; show the user what to do, not the exception name. */
+export function captureErrorMessage(err: unknown): string {
+  if (err instanceof DOMException) {
+    if (err.name === "NotAllowedError") {
+      return "Screen capture was denied. Allow screen recording for screenmirror and try again.";
+    }
+    if (err.name === "NotFoundError") {
+      return "No screen or window was available. Refresh the source list and try again.";
+    }
+    if (err.name === "NotReadableError") {
+      return "The screen could not be read. Close other capture apps and try again.";
+    }
+    if (err.name === "AbortError") return "Screen capture was canceled.";
+  }
+  const detail = err instanceof Error && err.message !== "" ? err.message : "";
+  return detail === "" ? "Screen capture failed." : `Screen capture failed: ${detail}`;
+}
 
 /**
  * Host-side capture engine. The renderer owns the peer connection; main only grants the selected
@@ -183,7 +201,7 @@ export function createMirror(): Mirror {
       return { ok: true, stream: capture, audio: audio !== null };
     } catch (err) {
       if (run !== generation) return stopped();
-      const message = err instanceof Error ? err.message : String(err);
+      const message = captureErrorMessage(err);
       fail(message);
       return { ok: false, error: message };
     }
@@ -209,14 +227,18 @@ export function createMirror(): Mirror {
     return true;
   }
 
-  async function setQuality(quality: Quality): Promise<void> {
-    if (videoTrack === null) return;
+  async function setQuality(quality: Quality): Promise<boolean> {
+    if (videoTrack === null) return true;
     const constraints = videoConstraints(quality);
     try {
       // Empty constraints clear the cap; the capture may keep its current size until it changes.
       await videoTrack.applyConstraints(constraints ?? {});
+      emit({ error: null });
+      return true;
     } catch (err) {
-      emit({ error: err instanceof Error ? err.message : String(err) });
+      const message = err instanceof Error ? err.message : String(err);
+      emit({ error: `Could not change quality to ${quality}: ${message}` });
+      return false;
     }
   }
 

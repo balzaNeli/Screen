@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { app, BrowserWindow, dialog, session, type WebContents } from "electron";
+import { toDataURL } from "qrcode";
 import { WebSocket } from "ws";
 
 import type { HostState } from "../shared/ipc.ts";
@@ -13,6 +14,7 @@ import { createPairing, type Pairing } from "../server/pairing.ts";
 import type { ViewerInfo } from "../server/ws.ts";
 import { createCaptureTarget, installDisplayMediaHandler } from "./display-media.ts";
 import { registerIpc } from "./ipc.ts";
+import { pairUrl, primaryUrl } from "./qr.ts";
 
 // Must be set before app.whenReady: mDNS ICE candidates are the classic LAN-WebRTC failure.
 app.commandLine.appendSwitch("disable-features", "WebRtcHideLocalIpsWithMdns");
@@ -31,18 +33,51 @@ let hostSocket: WebSocket | null = null;
 let viewer: ViewerInfo | null = null;
 let stateTimer: NodeJS.Timeout | null = null;
 let quitting = false;
+let qrDataUrl = "";
+let qrPayload = "";
+let qrError: string | null = null;
+
+/** Main renders the QR; regenerate when the address or PIN changes and never show the old one. */
+function refreshQr(base: string | null, pin: string): void {
+  const payload = base === null || pin === "" ? "" : pairUrl(base, pin);
+  if (payload === qrPayload) return;
+  qrPayload = payload;
+  qrDataUrl = "";
+  qrError = null;
+  if (payload === "") return;
+
+  void toDataURL(payload, { errorCorrectionLevel: "M", margin: 4, width: 320 })
+    .then((next) => {
+      if (qrPayload !== payload) return;
+      qrDataUrl = next;
+      pushState();
+    })
+    .catch(() => {
+      if (qrPayload !== payload) return;
+      qrError = "Could not render the pairing QR code. Use the URL and PIN above.";
+      pushState();
+    });
+}
 
 function hostState(): HostState {
   const status = pairing?.status() ?? null;
   const port = server?.port;
+  const urls =
+    port === undefined ? [] : lanAddresses().map((address) => `http://${address}:${port}/`);
+  const pin = status?.pin ?? "";
+  refreshQr(primaryUrl(urls), pin);
+  const noLan =
+    port !== undefined && urls.length === 0
+      ? "No LAN address found. Connect this computer to Wi-Fi or Ethernet."
+      : null;
   return {
-    urls: port === undefined ? [] : lanAddresses().map((address) => `http://${address}:${port}/`),
-    pin: status?.pin ?? "",
-    qrDataUrl: "", // Task 11 renders the QR in main and fills this in
+    urls,
+    pin,
+    qrDataUrl,
     expiresAt: status?.expiresAtMs ?? 0,
     viewer: viewer === null ? null : { userAgent: viewer.userAgent },
     audio: capture.get()?.audio ?? false,
-    error: null,
+    error: noLan ?? qrError,
   };
 }
 
@@ -103,8 +138,10 @@ function installPermissions(hostContentsId: number): void {
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    width: 900,
-    height: 640,
+    width: 980,
+    height: 760,
+    minWidth: 760,
+    minHeight: 560,
     show: false,
     backgroundColor: "#111111",
     webPreferences: {
