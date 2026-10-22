@@ -2,20 +2,23 @@
 
 Source of truth: `SPEC.md` (rev 5, approved) and `tasks/plan.md`.
 
-**Progress:** Tasks 1–10 implemented — Phases 1–2, the Electron shell, the host capture engine and
-the viewer app. Checkpoint 2 passed headlessly (39 tests green); **Checkpoint 1 passed 2026-10-18 →
-transport is WebRTC in Silk (Branch A); the MSE alternative is rejected on evidence.** Probe check
-4 also ran on the TV that day: connected, `video/H264` negotiated, first frame 942 ms. The host
-shell (Task 8) was verified against the real window on 2026-10-19; the capture engine (Task 9) was
-verified the same day with a real offer/answer, H.264, live quality/audio changes and a
-stop/restart cycle. The viewer (Task 10) was verified in Edge 155 against the real Electron host:
-QR prefill and URL scrub, keyboard pairing, a 1920x1080 H.264 stream, mute, fullscreen, auto-hide,
-viewer/host stop, wrong PIN and lockout. `npm run verify` is green (43 tests). Checkpoint 3 ran on
-the Fire TV (AFTCA002, Silk 144) on 2026-10-19: remote-only pairing, a 1080p stream, audio and the
-overlay controls worked. It passes functionally with two recorded caveats: the first-frame time was
-not stopwatch-timed, and 1080p30 does not hold a locked 30 fps yet (performance tuning follow-up).
-The one open Task 9 item is the audio-unsupported OS check, which needs a non-Windows host. Next:
-**Task 11 (host UI)**.
+**Progress:** Tasks 1–11 implemented — Phases 1–2, the Electron shell, the host capture engine, the
+viewer app and the host UI. Checkpoint 2 passed headlessly (39 tests green); **Checkpoint 1 passed
+2026-10-18 → transport is WebRTC in Silk (Branch A); the MSE alternative is rejected on evidence.**
+Probe check 4 also ran on the TV that day: connected, `video/H264` negotiated, first frame 942 ms.
+The host shell (Task 8) was verified against the real window on 2026-10-19; the capture engine
+(Task 9) the same day with a real offer/answer, H.264, live quality/audio changes and a stop/restart
+cycle. The viewer (Task 10) was verified in Edge 155 against the real Electron host: QR prefill and
+URL scrub, keyboard pairing, a 1920x1080 H.264 stream, mute, fullscreen, auto-hide, viewer/host
+stop, wrong PIN and lockout. The host UI (Task 11) was verified over CDP on 2026-10-19 and by
+scanning its QR with a phone on 2026-10-22: PIN rotation, prefill/scrub, live quality/audio and
+Stop followed the real state, the exercised failure paths showed specific text, and the phone had
+audible audio.
+`npm run verify` is green (47 tests). Checkpoint 3 ran on the Fire TV (AFTCA002, Silk 144) on
+2026-10-19: remote-only pairing, a 1080p stream, audio and the overlay controls worked. It passes
+functionally with two recorded caveats: the first-frame time was not stopwatch-timed, and 1080p30
+does not hold a locked 30 fps yet (performance tuning follow-up). The one open Task 9 item is the
+audio-unsupported OS check, which needs a non-Windows host. Next: **Task 12 (viewer polish)**.
 
 **Definition of Done — every task:**
 - [ ] `npm test` passes (no new skips, no deleted assertions)
@@ -395,19 +398,29 @@ status with the device name, and human-readable errors instead of silent failure
 capture denied, audio unavailable, no LAN interface, port fallback).
 
 **Acceptance criteria:**
-- [ ] QR encodes the reachable URL with the PIN and is scannable from a phone at arm's length
-- [ ] PIN and countdown refresh visibly at expiry; scanning the QR opens the viewer with the PIN prefilled
-- [ ] Start/Stop, quality and audio toggles reflect real engine state (no optimistic UI that lies)
-- [ ] Each failure path from the spec shows a specific message, never a raw exception or a dead button
-- [ ] No LAN-reachable page exposes the host UI or the PIN
+- [x] QR encodes the reachable URL with the PIN and is scannable from a phone at arm's length
+- [x] PIN and countdown refresh visibly at expiry; scanning the QR opens the viewer with the PIN prefilled
+- [x] Start/Stop, quality and audio toggles reflect real engine state (no optimistic UI that lies)
+- [x] Each failure path from the spec shows a specific message, never a raw exception or a dead button
+- [x] No LAN-reachable page exposes the host UI or the PIN
 
 **Verification:**
-- [ ] Tests: `npm test` (QR payload builder and URL selection helpers)
-- [ ] Manual: scan the QR with a phone, confirm prefill; toggle audio mid-session and watch the viewer
+- [x] Tests: `npm test` (QR payload builder and URL selection helpers)
+- [x] Manual: scan the QR with a phone, confirm prefill; toggle audio mid-session and watch the viewer
+
+**Result 2026-10-22:** CDP run against the real host with an Edge viewer: PIN `935322` → `413115`
+at expiry with the QR payload changing; the QR opened `?p=<pin>`, prefilled six slots and scrubbed
+to `/`; 1920x1080 capture, viewer status, live audio off/on, 720p ↔ 1080p and host Stop all
+followed the engine. Port fallback ran on :56954 with :4680 busy. A phone scanned the 240 px QR on
+2026-10-22 and had audible audio. The host UI stays on `file://`; the LAN server serves only the
+viewer and probe, never the PIN panel. Capture-denial text is unit-tested; the no-LAN and
+audio-unsupported branches are code-reviewed only (the latter needs a non-Windows host).
 
 **Dependencies:** Checkpoint 3
-**Files:** `src/main/qr.ts`, `src/main/main.ts`, `src/renderer/PairPanel.tsx`,
-`src/renderer/App.tsx`
+**Files:** `src/main/qr.ts`, `src/main/qrcode.d.ts`, `src/main/main.ts`,
+`src/renderer/App.tsx`, `src/renderer/PairPanel.tsx`, `src/renderer/host.css`,
+`src/renderer/mirror.ts`, `src/renderer/index.html`, `src/renderer/main.tsx`,
+`tests/qr.test.ts`, `tests/capture-errors.test.ts`
 **Scope:** M
 
 ---

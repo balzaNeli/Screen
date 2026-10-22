@@ -7,9 +7,10 @@ It exists for the case Deskreen makes awkward: an **Amazon Fire TV running Silk 
 remote** as the screen. Phones and tablets are supported, but every decision is made for the Fire
 TV first — keyboard-less, touch-less, camera-less, weak SoC — and must not break the others.
 
-> **Status: early.** The LAN server, pairing, signalling, the Electron host **shell**, the
-> capture engine and the **viewer app** are written and tested. The final host UI (the URL/PIN/QR
-> panel) is still Task 11, so there is no release or installer. See [Status](#status).
+> **Status: working, pre-release.** The LAN server, pairing, signalling, the Electron host UI
+> (URL/PIN/QR panel), the capture engine and the viewer are written and tested. There is no
+> installer or release; viewer polish, the security/README pass and the final acceptance remain.
+> See [Status](#status).
 
 ## How it works
 
@@ -45,13 +46,13 @@ video and audio travel directly between the two devices.
 | Electron host shell: window, permissions, IPC, host socket | **done**, verified against the real window (Task 8) |
 | Host capture engine: `getDisplayMedia`, H.264, peer wiring | **done**, verified with a fake peer (Task 9) |
 | Viewer UI: PIN pad, `<video>`, remote controls, `?debug=1` | **done**, verified in Edge and on the Fire TV (Task 10 / Checkpoint 3) |
-| QR code, host UI (PIN + URLs + viewer list) | **not written** (Task 11) |
+| Host UI: LAN URLs, PIN countdown, QR, viewer status, source/quality/audio controls, failure text | **done**, verified over CDP and with a phone scan (Task 11) |
 
-What you can run today: the server, the Electron shell, the host capture harness and the viewer.
-The viewer walks the full pair → stream → mute/fullscreen/stop cycle in a desktop browser, and the
-pairing endpoint can be exercised with `curl`. The host window still uses the Task 9 capture
-harness; it does not show the URL or PIN until Task 11, so pairing today is a dev flow (the values
-are in `HostState`).
+What you can run today: the full host and viewer. The host window shows every LAN URL, the rotating
+PIN and the QR code, and starts the capture; scan the QR on a phone or type the PIN on the Fire TV.
+The viewer walks the full pair → stream → mute/fullscreen/stop cycle, and the pairing endpoint can
+still be exercised with `curl`. `npm run serve` runs the LAN server and viewer without the Electron
+host (the PIN is printed in the terminal), so it is a protocol/dev tool, not the mirroring product.
 
 ## Requirements
 
@@ -66,15 +67,15 @@ are in `HostState`).
 ```bash
 npm install
 npm run build        # compiles src/ to dist/ and bundles the two SPAs
-npm start            # Electron host shell (temporary capture harness until Task 11)
+npm start            # Electron host: capture, LAN URLs, PIN and QR
 # or, without Electron:
 npm run serve        # LAN server on :4680 (PORT=4681 to change), prints the PIN
 ```
 
-Then, from the Fire TV's browser: `http://<lan-ip>:4680/` is the viewer (enter the PIN), and
-`http://<lan-ip>:4680/probe` is the hardware probe. The server prints the exact URL. The probe runs
-its safe checks (1–4) from a single button. Task 11 will put the viewer URL and the PIN in the host
-window; until then, read them from `HostState` in devtools.
+The host window shows the QR, the LAN URLs and the PIN. Scan the QR with a phone, or open the URL
+on the Fire TV and enter the PIN. `http://<lan-ip>:4680/probe` is the hardware probe; it runs its
+safe checks (1–4) from a single button. `npm run serve` runs the viewer and API without capture
+(the PIN is printed in the terminal), for protocol checks.
 
 The pairing endpoint, by hand:
 
@@ -203,7 +204,9 @@ memory: it is where "it should work" gets replaced by a number.
 3. **Checkpoint 3** — end-to-end on the Fire TV: **functionally passed 2026-10-19** (remote-only
    pairing, 1080p stream, audio and overlay controls); first-frame timing and a locked 1080p30
    remain measurement/tuning follow-ups.
-4. **Tasks 11–14** — host UI with the QR code and PIN, viewer polish, security/README pass, and the
+4. **Task 11 — host UI done 2026-10-22**: LAN URLs, rotating PIN, QR with prefilled viewer, live
+   viewer status, source/quality/audio controls and readable failure states; verified over CDP and
+   by scanning the QR from a phone. **Tasks 12–14** — viewer polish, security/README pass, and the
    coverage + constraint gates in `verify`.
 
 ## Repository map

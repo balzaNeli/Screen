@@ -212,7 +212,33 @@ TV-specific rows stay open for the final acceptance.
 | 14 | Wi-Fi drop → reconnect prompt appears, re-pair succeeds | |
 | 15 | Fire TV Back exits the viewer without leaving a stalled stream | |
 
-## Phone / tablet pass (fill after Checkpoint 3)
+## Task 11 — host UI (2026-10-19 CDP; phone scan 2026-10-22)
+
+Driven over CDP against the real Electron host (Windows 11, Electron 44.9.0) with an Edge 155
+viewer; no mocks. The physical check was a phone scan of the QR shown at its 240 px display size.
+
+| Check | Result |
+|---|---|
+| Host state | six-digit PIN, LAN URLs, 320 px QR PNG (`data:image/png`) displayed at 240 px, no host error |
+| PIN rotation | `935322` → `413115` at expiry; countdown changed; the QR payload and image source changed with it |
+| QR prefill / scrub | the exact `?p=<pin>` payload filled six slots, `location.search` was empty and the path `/`; `takePin` unit test pins that payload |
+| Physical scan | 2026-10-22: a phone scanned the 240 px QR, opened the viewer and played audio; the user reports the size is good at arm's length |
+| Start / waiting | Start captured 1920x1080 and previewed; status read "Capturing. Waiting for a viewer." until the viewer paired |
+| Viewer status | host pill showed `Viewer: Edge`; cleared on Stop |
+| Audio | host switch off/on reached the engine (viewer audio track muted/enabled); the user confirmed audible audio on the phone |
+| Quality | 720p capped at 1280x720; 1080p restored 1920x1080 without recapture |
+| Stop | host Stop ended the session and freed the seat; status returned to Ready |
+| Port fallback | :4680 busy → host advertised and served :56954 and showed the fallback notice |
+| Failure text | capture denial `NotAllowedError` → "Screen capture was denied..." (unit test); no-source, no-LAN, audio-unavailable and QR-render paths each have their own message (code review) |
+| Host UI on LAN | the host is `file://`; `/` serves the viewer and `/probe` the probe; no host bundle or PIN on an HTTP route |
+| Tests | 47 passing; `npx tsc -p tsconfig.json` clean; `npm run verify` green |
+
+**Not exercised here:** the phone's address bar was not inspected (prefill/scrub comes from the CDP
+run and the payload unit test); the no-LAN and audio-unsupported messages were not triggered on
+hardware; the source picker was loaded but not switched mid-run. The 1080p30 caveat from Checkpoint
+3 is unchanged.
+
+## Phone / tablet pass (final acceptance)
 
 | # | Check | Result |
 |---|---|---|
@@ -220,6 +246,9 @@ TV-specific rows stay open for the final acceptance.
 | 2 | PIN is prefilled and absent from the address bar afterwards | |
 | 3 | Sound plays after one button press at most (iOS autoplay policy) | |
 | 4 | Mute and fullscreen work on a touch device | |
+
+2026-10-22: the Task 11 phone scan opened the viewer and audio played; the touch controls and the
+iOS autoplay path in this table remain open for the final acceptance.
 
 ## Probe safety rules (added after the freeze)
 

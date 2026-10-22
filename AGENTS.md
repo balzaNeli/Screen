@@ -55,6 +55,11 @@ covers everything, currently clean) after touching those.
 - `src/renderer/mirror.ts` owns the host capture + peer connection: one `getDisplayMedia`, H.264
   preference before the offer, first offer withheld until `HostState.viewer` is non-null, live audio
   via `replaceTrack` on the held sender (no renegotiation), and `release()` on stop/bye/error.
+- `src/renderer/App.tsx` is the real host window: `PairPanel` displays main's PIN/QR/URLs and runs
+  the countdown; Start/Stop, quality and audio read back the engine state, and failures set a
+  specific message. `mirror.ts` maps capture denials to actionable text and returns booleans from
+  `setQuality`/`setAudio`, so a failed control reverts instead of lying. The host page stays on
+  `file://`; the server never serves it.
 - `src/viewer/main.tsx` owns the pair flow: `takePin` (`src/viewer/pin.ts`) reads `?p=` once,
   `history.replaceState` scrubs it, then `/api/info` + `/api/pair` and the PIN→Watch switch.
   `PinPad.tsx` is buttons only; `Watch.tsx` is the receive-only answerer — it never offers, queues
@@ -71,9 +76,10 @@ covers everything, currently clean) after touching those.
 - `src/server/pairing.ts` is a pure store with the clock injected: PIN TTL/rotation/lockout,
   single-use tokens, one viewer seat. `src/server/lan.ts` is pure when handed an interface map.
 - `src/main/` is the Electron shell: `main.ts` starts the server, owns the host WebSocket (the boot
-  token never reaches the renderer), pushes `HostState`, and enforces the window security posture;
-  `display-media.ts` grants the chosen source; `ipc.ts` is the IPC surface; `src/shared/ipc.ts`
-  holds the typed contract and the IPC boundary guard.
+  token never reaches the renderer), pushes `HostState` (including the QR data URL it renders and
+  caches by payload), and enforces the window security posture; `qr.ts` builds the primary URL and
+  the `?p=` payload; `display-media.ts` grants the chosen source; `ipc.ts` is the IPC surface;
+  `src/shared/ipc.ts` holds the typed contract and the IPC boundary guard.
 - `src/preload/preload.cts` must stay CommonJS (and compile to `preload.cjs`): a sandboxed preload
   cannot be an ES module. It may `require("electron")` and nothing else.
 - Electron 44 reports `getDisplayMedia` to `setPermissionRequestHandler` as a **`media`** request,
