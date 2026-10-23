@@ -9,8 +9,7 @@ TV first — keyboard-less, touch-less, camera-less, weak SoC — and must not b
 
 > **Status: working, pre-release.** The LAN server, pairing, signalling, the Electron host UI
 > (URL/PIN/QR panel), the capture engine and the viewer are written and tested. There is no
-> installer or release; viewer polish, the security/README pass and the final acceptance remain.
-> See [Status](#status).
+> installer or release; the final acceptance run remains. See [Status](#status).
 
 ## How it works
 
@@ -47,12 +46,15 @@ video and audio travel directly between the two devices.
 | Host capture engine: `getDisplayMedia`, H.264, peer wiring | **done**, verified with a fake peer (Task 9) |
 | Viewer UI: PIN pad, `<video>`, remote controls, `?debug=1` | **done**, verified in Edge and on the Fire TV (Task 10 / Checkpoint 3) |
 | Host UI: LAN URLs, PIN countdown, QR, viewer status, source/quality/audio controls, failure text | **done**, verified over CDP and with a phone scan (Task 11) |
+| Viewer polish: autoplay fallback, hotkeys, controls, overscan, ICE-restart reconnect | **done**, verified over CDP (Task 12) |
+| Security/README pass: headers/CSP on every route, no PIN/token leaks, troubleshooting | **done**, `tests/security.test.ts` (Task 13) |
 
 What you can run today: the full host and viewer. The host window shows every LAN URL, the rotating
 PIN and the QR code, and starts the capture; scan the QR on a phone or type the PIN on the Fire TV.
-The viewer walks the full pair → stream → mute/fullscreen/stop cycle, and the pairing endpoint can
-still be exercised with `curl`. `npm run serve` runs the LAN server and viewer without the Electron
-host (the PIN is printed in the terminal), so it is a protocol/dev tool, not the mirroring product.
+The viewer walks the full pair → stream → mute/fullscreen/stop cycle, including the muted autoplay
+fallback and the reconnect screen; the pairing endpoint can still be exercised with `curl`.
+`npm run serve` runs the LAN server and viewer without the Electron host (the PIN is printed in the
+terminal), so it is a protocol/dev tool, not the mirroring product.
 
 ## Requirements
 
@@ -76,6 +78,13 @@ The host window shows the QR, the LAN URLs and the PIN. Scan the QR with a phone
 on the Fire TV and enter the PIN. `http://<lan-ip>:4680/probe` is the hardware probe; it runs its
 safe checks (1–4) from a single button. `npm run serve` runs the viewer and API without capture
 (the PIN is printed in the terminal), for protocol checks.
+
+### Fire TV (first time)
+
+1. On the Fire TV, open Silk and type the LAN URL the host shows (`http://<lan-ip>:4680/`).
+2. Bookmark that page in Silk. The exact menu label varies by Fire OS and Silk version.
+3. After that, open the bookmark and enter the six-digit PIN; the sixth digit submits. The QR code
+   is for phones/tablets, not the TV remote.
 
 The pairing endpoint, by hand:
 
@@ -138,6 +147,11 @@ The whole point is that nothing leaves the house, so the rules are strict and wr
 - **Accepted limit: HTTP is plain.** Anyone who can sniff the Wi-Fi can read the PIN and the
   token during the 60 s window. That is the home-LAN threat model; TLS with self-signed certs on a
   TV browser was judged not worth the friction.
+- **Accepted: the QR is a photographable secret.** Anyone who can see the host screen can read the
+  same PIN off it, so the QR is no weaker than the digits; the 60 s TTL and single-use token bound
+  the damage.
+- **Accepted: system audio is the whole-system mix.** Sharing one window still sends every
+  notification sound. Per-app capture is out of scope for v1.
 
 ## Known limits
 
@@ -148,8 +162,8 @@ where it breaks:
   to need a power cycle (an MSE chunk-streaming test and a WebRTC one). The device has no headroom
   for anything beyond decode-and-display, which is exactly what it does here. See
   `docs/manual-tests.md`.
-- **The receive ceiling is not measured yet**: 720p30 first, 1080p30 only if it holds flat, at
-  Checkpoint 3 on real hardware. Until then the default quality is provisional.
+- **The receive ceiling is not locked yet**: Checkpoint 3 streamed 1080p30, but it does not hold a
+  steady 30 fps; 720p30 is the fallback. Tuning is a Task 14 follow-up.
 - **System audio is Windows-only** and it is the **whole system mix**, not per application:
   sharing one window still sends every notification sound. The UI does not pretend otherwise.
 - **`navigator.mediaDevices` is hidden** in Silk, so any future viewer-side capture (voice,
@@ -158,25 +172,27 @@ where it breaks:
   turning that setting off is the documented workaround.
 - The Fire TV URL must be typed once with the remote — bookmark it.
 - Browser autoplay policies may need one button press on the viewer before sound is audible
-  (iOS Safari in particular); the mute button covers it.
+  (iOS Safari in particular). The video keeps playing muted; focus "Press OK for sound" and press
+  OK/Enter, or tap it on a phone, to unmute.
 - **AP/client isolation or a guest network kills it** — no route, no stream. Symptom and diagnosis
   live in the troubleshooting notes.
 - Windows Firewall asks for permission on first run.
-- Reconnect logic stops at ICE restart on `failed`; if that fails, the viewer reloads and re-pairs.
+- A failed ICE restart shows a reconnect screen and returns to the PIN pad; re-pairing does not
+  reload the page. A physical Wi-Fi-drop test is still pending.
 - Maximum one viewer, one screen at a time. Microphone capture, file transfer, whiteboard,
   multi-viewer and internet traversal are explicit non-goals for v1.
 
 ## Troubleshooting
 
-- **Nothing loads on the TV**: Windows Firewall prompt never answered, or you are on the wrong
-  network. The server prints every LAN URL it has — use that exact one.
-- **Connects, then the picture freezes**: AP/client isolation. Same symptom from a VPN on the host.
-- **A site claims Silk has no WebRTC**: the sites test for `navigator.mediaDevices`, which a Fire
-  TV hides. The probe at `/probe` reports the truth in ten seconds.
-- **Stutter or a slideshow instead of video**: check the negotiated codec (it should be H.264 —
-  hardware decode) and whether something else on the network is saturating the link.
-- **The TV became unresponsive during testing**: it was asked to encode. Power-cycle it, and do
-  not re-run probe checks 4b or 6 on that device.
+| Symptom | Likely cause | What to do |
+|---|---|---|
+| Nothing loads on the TV | Windows Firewall blocked the app, or the devices are on different networks | Allow the app (Electron, or Node for `npm run serve`) on **Private** networks when Windows asks; if the prompt was dismissed, add an inbound rule for the app and the printed port (4680 by default). Use the exact LAN URL the host prints; a Public network profile blocks it |
+| The page loads but the stream never starts, or it freezes after a few seconds | AP/client isolation, a guest network, a VPN on the host, or a router that blocks peer-to-peer | Put both devices on the same non-guest SSID, disable the host VPN, and check the router's client-isolation setting. The host disables Chromium's mDNS candidate hiding so its candidates are real LAN IPs, but a router that blocks multicast or a viewer that only offers `.local` can still fail; there is no TURN fallback by design |
+| Silk shows a blank page, black video or misplaced controls | Silk's accelerated rendering on some Fire TV models | Turn off accelerated rendering in Silk's settings (the menu label varies by Fire OS version), reload the viewer, and try `/probe` to confirm WebRTC |
+| Video plays but there is no sound | The browser/TV blocked unmuted autoplay | The video stays playing muted. Focus **Press OK for sound** and press OK/Enter, or tap it on a phone. On iOS, one tap |
+| Host says "System audio is unavailable on this OS. Video only." | Electron loopback capture is Windows-only | Expected on macOS/Linux; this is the video-only path. On Windows this message should not appear. For silent audio on Windows, check the output device and the app's volume in the mixer, then restart capture with audio enabled |
+| Stutter or a slideshow instead of video | The link is saturated, or the codec is not H.264 | Check `?debug=1` for H.264 and 720p/1080p; close other traffic or lower the quality. The Fire TV decodes; it must never encode |
+| The TV became unresponsive during testing | It was asked to encode by a probe | Power-cycle it and do not re-run probe checks 4b or 6 on that device |
 
 ## Testing
 
@@ -204,10 +220,10 @@ memory: it is where "it should work" gets replaced by a number.
 3. **Checkpoint 3** — end-to-end on the Fire TV: **functionally passed 2026-10-19** (remote-only
    pairing, 1080p stream, audio and overlay controls); first-frame timing and a locked 1080p30
    remain measurement/tuning follow-ups.
-4. **Task 11 — host UI done 2026-10-22**: LAN URLs, rotating PIN, QR with prefilled viewer, live
-   viewer status, source/quality/audio controls and readable failure states; verified over CDP and
-   by scanning the QR from a phone. **Tasks 12–14** — viewer polish, security/README pass, and the
-   coverage + constraint gates in `verify`.
+4. **Tasks 11–13 — done 2026-10-22**: host UI (LAN URLs, rotating PIN, QR, viewer status,
+   controls); viewer polish (autoplay fallback, hotkeys, overscan, ICE-restart reconnect);
+   security/README pass (headers/CSP on every route, no PIN/token leaks, troubleshooting).
+   **Task 14** — coverage + constraint gates and the full acceptance run remain.
 
 ## Repository map
 

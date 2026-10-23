@@ -472,18 +472,27 @@ audio-unsupported path in the troubleshooting table. Document the accepted risks
 plainly.
 
 **Acceptance criteria:**
-- [ ] A test asserts the security headers and CSP on every route, including 404s
-- [ ] A test asserts no response body contains the current PIN or an issued token
-- [ ] README lets a stranger run the app, pair a Fire TV and diagnose the four documented failure modes
-- [ ] Accepted risks (plain HTTP pairing, photographable QR, whole-system audio) are stated, not buried
-- [ ] No **runtime** dependency added beyond `ws` and `qrcode` (`@types/ws` and the build tooling are dev-only)
+- [x] A test asserts the security headers and CSP on every route, including 404s
+- [x] A test asserts no response body contains the current PIN or an issued token
+- [x] README lets a stranger run the app, pair a Fire TV and diagnose the four documented failure modes
+- [x] Accepted risks (plain HTTP pairing, photographable QR, whole-system audio) are stated, not buried
+- [x] No **runtime** dependency added beyond `ws` and `qrcode` (`@types/ws` and the build tooling are dev-only)
 
 **Verification:**
-- [ ] Tests: `npm test` (new: `tests/security.test.ts`)
-- [ ] Manual: follow the README from scratch on a clean checkout path and fix anything that lies
+- [x] Tests: `npm test` (new: `tests/security.test.ts`)
+- [x] Manual: follow the README from scratch on a clean checkout path and fix anything that lies
+
+**Result 2026-10-22:** `tests/security.test.ts` covers 200/400/401/404/405/409 across the viewer,
+assets, API, probe and traversal; every response carries the CSP, `nosniff`, `no-referrer` and
+`no-store`. The live PIN, issued token and host boot token appear only where intended; no secret
+file leaks. README now has the Fire TV first-time walkthrough, accepted risks and troubleshooting
+for Silk accelerated rendering, firewall, mDNS/AP isolation, autoplay and audio-unsupported.
+53 tests, `npx tsc -p tsconfig.json` clean, `npm run verify` green. A clean `git worktree` +
+`npm ci` + `npm run verify` + `npm run serve` pass is recorded in `docs/manual-tests.md`; the Fire TV
+walkthrough remains for final acceptance.
 
 **Dependencies:** Task 11, Task 12
-**Files:** `tests/security.test.ts`, `README.md`, `docs/manual-tests.md`, `src/server/http.ts`
+**Files:** `tests/security.test.ts`, `README.md`, `SPEC.md`, `docs/manual-tests.md`
 **Scope:** M
 
 ---

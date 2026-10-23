@@ -416,10 +416,12 @@ build with an unhandled `uncaughtException`; remove the VP8 fallback from the co
   the documented workaround is switching Silk's rendering mode off.
 - Fire TV URLs must be typed once with the remote; the README documents bookmarking the URL.
 - Browser autoplay policy may require one button press on the viewer before sound is audible
-  (iOS Safari in particular) — the mute button covers it.
+  (iOS Safari in particular) - the focused "Press OK for sound" control covers it; video never
+  waits for audio.
 - AP/client isolation or guest networks block peer-to-peer; symptom and diagnosis go in the README.
 - Windows Firewall prompt appears on first run; documented with a screenshot path.
-- No reconnect logic beyond ICE restart on `failed`; if that fails the viewer reloads and re-pairs.
+- Reconnect logic stops at one ICE restart on `failed`; if that fails the viewer shows a reconnect
+  screen and returns to the PIN pad, and re-pairs without reloading the page.
 
 ---
 

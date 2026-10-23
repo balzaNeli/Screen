@@ -87,7 +87,7 @@ but is not locked at 30 fps yet (tuning follow-up); no fps/`lost` numbers record
 ### Phase 4 — Host UI, polish and hardening
 - [x] Task 11: Host UI: URL list, QR code, viewer status, quality/audio toggles, error states
 - [x] Task 12: Viewer polish: autoplay-tap, mute/fullscreen/hotkeys, ICE-restart reconnect
-- [ ] Task 13: Security pass, README and troubleshooting (Silk accelerated mode, firewall, mDNS)
+- [x] Task 13: Security pass, README and troubleshooting (Silk accelerated mode, firewall, mDNS)
 - [ ] Task 14: Coverage ≥ 90% on the four pure modules, `npm run verify` gate, full acceptance run
 
 ### Checkpoint: Complete

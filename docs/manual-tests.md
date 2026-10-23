@@ -262,6 +262,21 @@ rejected unmuted `play()` until the test allowed it, and the reconnect checks pu
 TV; the real-remote Stop and overscan rows. The simulated drop covers the reducer and signaling
 path, not a real network-interface change.
 
+## Task 13 — security pass and README (2026-10-22)
+
+| Check | Result |
+|---|---|
+| Headers / CSP | `tests/security.test.ts` checks `/`, assets, `/api/info`, `/api/pair` 200/400/401/405/409, `/probe*`, 404s and traversal; every response carries the CSP, `nosniff`, `no-referrer` and `no-store` |
+| Secrets | the live PIN, the issued token and the host boot token are absent from every response except the single 200 that issues the token; path traversal never exposes the secret file |
+| README | quick start, Fire TV first-time walkthrough, accepted risks and the troubleshooting table (Silk accelerated rendering, firewall, mDNS/AP isolation, autoplay, audio-unsupported) reviewed against the code |
+| Tests | 53 passing; `npx tsc -p tsconfig.json` clean; `npm run verify` green |
+
+**Clean checkout 2026-10-22:** a detached `git worktree` at this commit, `npm ci` (151 packages,
+0 vulnerabilities), `npm run verify` green (53 tests), and `node scripts/serve.mjs` on port 4761
+served `/`, `/probe` and `/api/info` with the CSP header. The Electron `npm start` path was already
+verified in the working checkout (Tasks 11–12); it was not relaunched from the clean tree to avoid a
+second host window. A Fire TV walkthrough from the README remains in the final acceptance.
+
 ## Phone / tablet pass (final acceptance)
 
 | # | Check | Result |
