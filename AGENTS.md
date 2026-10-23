@@ -11,10 +11,13 @@ code — and keep all three in step with the code: commits name the spec task th
 
 ## Commands
 
-- `npm run verify` — lint + test + build. This is the gate; **there is no CI**. Run it before
-  every commit.
+- `npm run verify` — lint + test + coverage + build + `check:gates`. This is the gate; **there is
+  no CI**. Run it before every commit.
 - `npm test` / `npm run coverage` — `node --test "tests/**/*.test.ts"`. The glob form is required;
   `node --test tests/` does not work. Node 24 strips the types, there is no compile step.
+  `coverage` includes the four pure modules and fails below 90% lines.
+- `npm run check:gates` — scans `src/` and `dist/` for a non-empty `iceServers:` and
+  `src/viewer`/`dist/viewer` for capture APIs. `verify` runs it after the build.
 - `npm run build` — `build:main` (`tsc -p tsconfig.main.json` → `dist/`) then `build:web`
   (vite → `dist/renderer`, `dist/viewer`).
 - `npm run serve` — standalone HTTP server on `:4680` (`PORT=` overrides), for the Fire TV.
@@ -97,11 +100,12 @@ covers everything, currently clean) after touching those.
 
 - **The viewer is receive-only.** Never `getUserMedia`, `getDisplayMedia`, a permission request or
   a `navigator.mediaDevices` feature test — Silk on Fire TV hides that object (no camera/mic), and
-  that hidden object is why the web believes "Silk has no WebRTC". It does.
+  that hidden object is why the web believes "Silk has no WebRTC". It does. `npm run check:gates`
+  scans `src/viewer` and `dist/viewer` for those names.
 - **The viewer PIN pad is buttons, not an `<input>`.** An input would summon Silk's on-screen
   keyboard, which breaks the remote-only flow.
-- **No STUN/TURN, ever.** `RTC_CONFIG.iceServers` stays empty and frozen. Task 14 adds the grep
-  gate to `npm run verify`; until then it is enforced by review.
+- **No STUN/TURN, ever.** `RTC_CONFIG.iceServers` stays empty and frozen; `npm run check:gates`
+  fails on a non-empty `iceServers:` in `src/` or `dist/`.
 - **Strict CSP on every response** (`src/server/http.ts`), so no served page may use inline
   `<script>`/`<style>` — that is why `docs/silk-probe.*` are separate files that Vite never sees.
 - Signaling relays `Signal` frames verbatim and never parses SDP.

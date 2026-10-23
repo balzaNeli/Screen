@@ -197,14 +197,15 @@ where it breaks:
 ## Testing
 
 ```bash
-npm run verify     # the gate: lint + tests + build, zero warnings
-npm run coverage   # line/branch numbers for the suite
+npm run verify     # lint + tests + coverage gate + build + no-STUN/receive-only gates
+npm run coverage   # >=90% lines on the four pure modules
 ```
 
 The suite runs TypeScript directly on Node 24 (`node --test`), starts **real servers on port 0**
 and talks to them over real HTTP and WebSocket connections — nothing of ours is mocked, because
-the mocks are what would be wrong. `npm run coverage` prints the numbers; the pairing store and
-the signalling relay are the best covered files in the repo.
+the mocks are what would be wrong. `npm run coverage` reports the four pure modules and fails below
+90% lines; `npm run verify` also scans `src/` and `dist/` for a non-empty `iceServers:` and for
+viewer capture APIs.
 
 Everything that depends on a real screen, a real Wi-Fi link and a real TV is logged in
 `docs/manual-tests.md`, including the runs that froze the hardware. That file is the project's

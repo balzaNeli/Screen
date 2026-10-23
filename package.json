@@ -14,9 +14,10 @@
     "start": "electron .",
     "serve": "node scripts/serve.mjs",
     "test": "node --test \"tests/**/*.test.ts\"",
-    "coverage": "node --test --experimental-test-coverage \"tests/**/*.test.ts\"",
+    "coverage": "node --test --experimental-test-coverage --test-coverage-include=src/shared/protocol.ts --test-coverage-include=src/shared/audio.ts --test-coverage-include=src/shared/codecs.ts --test-coverage-include=src/server/pairing.ts --test-coverage-lines=90 \"tests/**/*.test.ts\"",
     "lint": "eslint . --max-warnings 0",
-    "verify": "npm run lint && npm test && npm run build"
+    "check:gates": "node scripts/check-gates.mjs",
+    "verify": "npm run lint && npm test && npm run coverage && npm run build && npm run check:gates"
   },
   "dependencies": {
     "qrcode": "^1.5.4",

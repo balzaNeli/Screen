@@ -277,6 +277,35 @@ served `/`, `/probe` and `/api/info` with the CSP header. The Electron `npm star
 verified in the working checkout (Tasks 11–12); it was not relaunched from the clean tree to avoid a
 second host window. A Fire TV walkthrough from the README remains in the final acceptance.
 
+## Task 14 — success criteria evidence (2026-10-22)
+
+"Verified" means a named test or logged run covers the whole criterion. "Not verified" means at
+least one part is still open; the reason is in the evidence column. The Fire TV final acceptance is
+the run that closes the open rows.
+
+| # | Criterion | Evidence | Status |
+|---|---|---|---|
+| 1 | Host UI shows every LAN URL, a QR code and a 6-digit PIN | Task 11 "Host state" and "PIN rotation"; `tests/qr.test.ts`; phone scan | Verified |
+| 2 | First rendered frame within 3 s of a valid PIN | Probe check 4 measured 942 ms on a same-device loopback; Checkpoint 3 was not stopwatch-timed | Not verified: real-network first frame unmeasured |
+| 3 | Glass-to-glass latency <= 250 ms at 1080p30 | Requires filming a millisecond stopwatch; not measured | Not verified |
+| 4 | Fire TV pairing with the remote alone, Enter on the 6th digit | Checkpoint 3 "Pairing / remote-only: pass"; Task 10 keyboard-only pairing; Task 12 Enter reveal/guard | Verified on `AFTCA002` |
+| 5 | H.264 negotiated and playback holds 1080p30 with no dropped-frame growth | Probe check 4 and Task 10 `?debug=1` show H.264; Checkpoint 3 streamed 1080p30 but recorded no steady fps/dropped-frame numbers | Not verified: steady 1080p30 and dropped-frame growth; H.264 part verified |
+| 6 | Fullscreen, no crop of host edges, all controls remote-reachable | Task 12 overscan (829x844 in 921x936) and `f` fullscreen in Edge; Checkpoint 3 remote controls | Not verified on Fire TV: real overscan/crop not measured; Edge pass |
+| 7 | Host sound heard on the viewer within 1 s, in sync | Checkpoint 3 audible; no stopwatch or click-track measurement | Not verified: timing/sync not measured |
+| 8 | Viewer mute restores; host audio off stops viewer audio within 1 s | Task 10 mute; Task 9 host audio off/on; Task 11 host switch; no 1 s stopwatch | Not verified: 1 s bound not measured; functional path works |
+| 9 | Audio-unsupported OS runs video-only and says so in both UIs | `tests/shared.test.ts` `audioModeFor`; Task 9 branch; no macOS/Linux hardware run | Not verified on hardware; unit branch covered |
+| 10 | Wrong PIN -> 401; 3 failures -> 429, lockout and rotation | `tests/http.test.ts` wrong PIN/lockout; `tests/pairing.test.ts` rotation; Task 10 CDP lockout | Verified |
+| 11 | Pairing token single-use; replay closes 1008 | `tests/pairing.test.ts` token once; `tests/ws.test.ts` replayed token -> 1008 | Verified |
+| 12 | Expired PIN (60 s TTL) cannot be used even if correct | `tests/pairing.test.ts` "an expired PIN fails even when it is the correct one" | Verified |
+| 13 | QR opens the viewer with the PIN prefilled; PIN leaves the address bar/history | `tests/pin.test.ts`, `tests/qr.test.ts`, Task 10 URL scrub, Task 11 phone scan | Verified (CDP + unit; phone address bar not inspected) |
+| 14 | `iceServers` empty in built output; no STUN/TURN | `tests/shared.test.ts` frozen config; `tests/gates.test.ts`; `npm run check:gates` | Verified |
+| 15 | Host Stop ends `<video>` within 1 s and closes both peer connections | Task 12 host Stop screen in 45 ms; Task 9/10 stop paths; both `pc.connectionState === "closed"` not explicitly asserted | Not verified: closed-state assertion missing |
+| 16 | Second viewer with the same consumed token refused while session 1 lives | `tests/ws.test.ts` replay -> 1008; `tests/http.test.ts` busy -> 409 | Verified |
+| 17 | `npm test`/`npm run lint` clean; four pure modules >= 90% lines | `npm run verify`; coverage report 99.15% aggregate, 96.72-100% per file | Verified |
+
+**Clean install 2026-10-22:** a detached `git worktree` at this commit, `npm ci` (151 packages,
+0 vulnerabilities) and `npm run verify` green: 57 tests, coverage 99.15% aggregate, gates ok.
+
 ## Phone / tablet pass (final acceptance)
 
 | # | Check | Result |

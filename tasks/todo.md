@@ -505,18 +505,28 @@ walkthrough remains for final acceptance.
 entry) in `docs/manual-tests.md`.
 
 **Acceptance criteria:**
-- [ ] Coverage report shows ≥90% lines on the four pure modules
-- [ ] `npm run verify` fails if `iceServers:` appears non-empty anywhere in `src/` or `dist/`, or if viewer code mentions `getUserMedia`, `getDisplayMedia` or `navigator.mediaDevices`
-- [ ] Every one of the 17 spec success criteria has a named evidence row, or is explicitly marked "not verified" with the reason
-- [ ] No skipped tests, no suppressed lint errors
-- [ ] Working tree committed in logical chunks with messages that reference the spec sections
+- [x] Coverage report shows ≥90% lines on the four pure modules
+- [x] `npm run verify` fails if `iceServers:` appears non-empty anywhere in `src/` or `dist/`, or if viewer code mentions `getUserMedia`, `getDisplayMedia` or `navigator.mediaDevices`
+- [x] Every one of the 17 spec success criteria has a named evidence row, or is explicitly marked "not verified" with the reason
+- [x] No skipped tests, no suppressed lint errors
+- [x] Working tree committed in logical chunks with messages that reference the spec sections
 
 **Verification:**
-- [ ] `npm run verify` green from a clean `node_modules` install
+- [x] `npm run verify` green from a clean `node_modules` install
 - [ ] Manual: full acceptance run on the Fire TV with the log filled in, including a steady 30 fps at 1080p (tune the host capture/encoder first if needed)
 
+**Result 2026-10-22:** `npm run coverage` is a 90% line gate over `protocol.ts`, `audio.ts`,
+`codecs.ts` and `pairing.ts` (99.15% aggregate; 96.72-100% per file). `npm run verify` now runs
+lint + test + coverage + build + `check:gates`; the gate scans `src/` and `dist/` for a non-empty
+`iceServers:` and `src/viewer`/`dist/viewer` for capture APIs, with `tests/gates.test.ts` covering
+pass and fail cases. All 17 success criteria have an evidence row in `docs/manual-tests.md`; the
+open ones are explicitly marked not verified. 57 tests, no skipped tests, no suppressions. A clean
+`git worktree` + `npm ci` + `npm run verify` pass (57 tests, 99.15%, gates ok) is recorded in
+`docs/manual-tests.md`. The Fire TV full acceptance remains.
+
 **Dependencies:** Task 13
-**Files:** `package.json`, `docs/manual-tests.md`, `tests/*.test.ts` (coverage gaps only)
+**Files:** `package.json`, `scripts/check-gates.mjs`, `tests/gates.test.ts`, `docs/manual-tests.md`,
+`README.md`, `AGENTS.md`
 **Scope:** M
 
 ---
