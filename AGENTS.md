@@ -54,7 +54,9 @@ covers everything, currently clean) after touching those.
   `capture.ts` (`videoConstraints`, the quality caps applied with `applyConstraints`).
 - `src/renderer/mirror.ts` owns the host capture + peer connection: one `getDisplayMedia`, H.264
   preference before the offer, first offer withheld until `HostState.viewer` is non-null, live audio
-  via `replaceTrack` on the held sender (no renegotiation), and `release()` on stop/bye/error.
+  via `replaceTrack` on the held sender (no renegotiation), and `release()` on stop/bye/error. A
+  failed host peer sends one restarted offer (`offer(true)` → `restartIce()`) and reports
+  `reconnecting`.
 - `src/renderer/App.tsx` is the real host window: `PairPanel` displays main's PIN/QR/URLs and runs
   the countdown; Start/Stop, quality and audio read back the engine state, and failures set a
   specific message. `mirror.ts` maps capture denials to actionable text and returns booleans from
@@ -62,10 +64,13 @@ covers everything, currently clean) after touching those.
   `file://`; the server never serves it.
 - `src/viewer/main.tsx` owns the pair flow: `takePin` (`src/viewer/pin.ts`) reads `?p=` once,
   `history.replaceState` scrubs it, then `/api/info` + `/api/pair` and the PIN→Watch switch.
-  `PinPad.tsx` is buttons only; `Watch.tsx` is the receive-only answerer — it never offers, queues
-  ICE until `setRemoteDescription`, and owns mute/fullscreen/stop plus the `?debug=1` stats. All
-  styling is `viewer.css`; the server CSP blocks inline styles/scripts. After a failed attempt,
-  `PinPad` restores focus to "1" from an effect: at handler time React still has the keys disabled.
+  `PinPad.tsx` is buttons only; `Watch.tsx` is the receive-only answerer - it never offers, queues
+  ICE until `setRemoteDescription`, and owns mute/fullscreen/stop plus the `?debug=1` stats.
+  `connection.ts` is its pure reconnect reducer: one `restartIce()` per failure, an 8 s timeout,
+  then the reconnect screen. Blocked unmuted playback falls back to muted video with one "Press OK
+  for sound" control; `m`/`f`/Enter mirror the buttons. All styling is `viewer.css`; the server CSP
+  blocks inline styles/scripts. After a failed attempt, `PinPad` restores focus to "1" from an
+  effect: at handler time React still has the keys disabled.
 - `src/server/http.ts` is the entire LAN surface: viewer page at `/`, `/assets/*` through a
   containment check, `/api/info`, `/api/pair`, `/probe*` from a fixed-name allowlist
   (`PROBE_FILES`), and the `ws` upgrade for `/ws`. The host UI is deliberately **not** served

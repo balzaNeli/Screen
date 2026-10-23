@@ -2,6 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { parseSignal } from "../shared/protocol.ts";
 import { RTC_CONFIG } from "../shared/rtc.ts";
+import {
+  connectionReducer,
+  initialConnection,
+  type ConnectionEvent,
+  type ConnectionState,
+} from "./connection.ts";
+
+const RECONNECT_TIMEOUT_MS = 8000;
 
 type WatchProps = { token: string; debug: boolean; onEnded: (message: string) => void };
 
@@ -29,31 +37,59 @@ export function Watch({ token, debug, onEnded }: WatchProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const muteRef = useRef<HTMLButtonElement>(null);
+  const reconnectRef = useRef<HTMLButtonElement>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const finishRef = useRef<(message: string) => void>(() => undefined);
   const hideTimer = useRef<number | null>(null);
+  const connectionRef = useRef<ConnectionState>(initialConnection);
+  const needsSoundRef = useRef(false);
+  const controlsRef = useRef(true);
   const [status, setStatus] = useState("Connecting...");
   const [hasStream, setHasStream] = useState(false);
   const [muted, setMuted] = useState(true);
+  const [needsSound, setNeedsSound] = useState(false);
+  const [connection, setConnection] = useState<ConnectionState>(initialConnection);
   const [fullscreen, setFullscreen] = useState(false);
   const [controls, setControls] = useState(true);
   const [stats, setStats] = useState<DebugInfo | null>(null);
 
   const showControls = useCallback(() => {
     setControls(true);
+    controlsRef.current = true;
     if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
-    hideTimer.current = window.setTimeout(() => setControls(false), 5000);
+    hideTimer.current = window.setTimeout(() => {
+      if (!needsSoundRef.current) {
+        controlsRef.current = false;
+        setControls(false);
+      }
+    }, 5000);
   }, []);
 
   useEffect(() => {
+    needsSoundRef.current = needsSound;
+  }, [needsSound]);
+
+  useEffect(() => {
+    if (!needsSound) return;
+    setControls(true);
+    controlsRef.current = true;
+    if (hideTimer.current !== null) {
+      window.clearTimeout(hideTimer.current);
+      hideTimer.current = null;
+    }
+    muteRef.current?.focus();
+  }, [needsSound]);
+
+  useEffect(() => {
+    if (connection.phase === "lost") reconnectRef.current?.focus();
+  }, [connection.phase]);
+
+  useEffect(() => {
     showControls();
-    const onKey = () => showControls();
     const onPointer = () => showControls();
-    window.addEventListener("keydown", onKey);
     window.addEventListener("pointermove", onPointer);
     window.addEventListener("pointerdown", onPointer);
     return () => {
-      window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointermove", onPointer);
       window.removeEventListener("pointerdown", onPointer);
       if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
@@ -75,6 +111,8 @@ export function Watch({ token, debug, onEnded }: WatchProps) {
     let finished = false;
     let remoteReady = false;
     let statsTimer: number | null = null;
+    let reconnectTimer: number | null = null;
+    let iceFailureHandled = false;
     let previousVideo: { bytes: number; timestamp: number } | null = null;
     const pendingIce: RTCIceCandidateInit[] = [];
     const video = videoRef.current;
@@ -89,6 +127,7 @@ export function Watch({ token, debug, onEnded }: WatchProps) {
       if (finished) return;
       finished = true;
       if (statsTimer !== null) window.clearInterval(statsTimer);
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       socket.onclose = null;
       socket.close();
       peer.close();
@@ -96,15 +135,63 @@ export function Watch({ token, debug, onEnded }: WatchProps) {
     }
     finishRef.current = finish;
 
+    function transition(event: ConnectionEvent): ConnectionState {
+      const next = connectionReducer(connectionRef.current, event);
+      connectionRef.current = next;
+      if (!disposed) setConnection(next);
+      return next;
+    }
+
+    function handleConnected(): void {
+      if (finished || disposed) return;
+      iceFailureHandled = false;
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      transition("connected");
+    }
+
+    // Exactly one ICE restart per failure; the host offerer answers with the matching restarted
+    // offer. A genuine second failure (after the restart reaches checking) leaves the reconnect
+    // screen, while the duplicate failed event from the other state handler is ignored.
+    function handleFailure(): void {
+      if (finished || disposed) return;
+      const before = connectionRef.current;
+      if (before.phase === "reconnecting" && iceFailureHandled) return;
+      const next = transition("failed");
+      if (next.phase !== "reconnecting" || before.restarts !== 0) return;
+      iceFailureHandled = true;
+      try {
+        peer.restartIce();
+      } catch {
+        transition("timeout");
+        return;
+      }
+      setStatus("Reconnecting...");
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        transition("timeout");
+      }, RECONNECT_TIMEOUT_MS);
+    }
+
     async function tryUnmute(): Promise<void> {
       if (video === null) return;
       video.muted = false;
       try {
         await video.play();
-        if (!disposed) setMuted(false);
+        if (video.paused || video.muted) throw new DOMException("blocked", "NotAllowedError");
+        if (!disposed) {
+          setMuted(false);
+          setNeedsSound(false);
+        }
       } catch {
         video.muted = true;
-        if (!disposed) setMuted(true);
+        void video.play().catch(() => undefined);
+        if (!disposed) {
+          setMuted(true);
+          setNeedsSound(true);
+        }
       }
     }
 
@@ -147,9 +234,26 @@ export function Watch({ token, debug, onEnded }: WatchProps) {
       );
     };
 
+    peer.oniceconnectionstatechange = () => {
+      if (peer.iceConnectionState === "checking") iceFailureHandled = false;
+      if (peer.iceConnectionState === "failed") handleFailure();
+      if (peer.iceConnectionState === "connected" || peer.iceConnectionState === "completed") {
+        handleConnected();
+      }
+    };
+
     peer.onconnectionstatechange = () => {
-      if (peer.connectionState === "connected") setStatus("Connected");
-      if (peer.connectionState === "failed") finish("Connection failed. Pair again.");
+      if (peer.connectionState === "connected") {
+        handleConnected();
+        setStatus("Connected");
+      }
+      if (
+        peer.connectionState === "failed" &&
+        peer.iceConnectionState !== "failed" &&
+        peer.iceConnectionState !== "checking"
+      ) {
+        handleFailure();
+      }
     };
 
     socket.onopen = () => setStatus("Waiting for the host...");
@@ -215,6 +319,7 @@ export function Watch({ token, debug, onEnded }: WatchProps) {
       disposed = true;
       finishRef.current = () => undefined;
       if (statsTimer !== null) window.clearInterval(statsTimer);
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
       socket.onclose = null;
       socket.close();
       peer.close();
@@ -227,16 +332,25 @@ export function Watch({ token, debug, onEnded }: WatchProps) {
     const video = videoRef.current;
     if (video === null) return;
     if (!muted) {
+      video.muted = true;
       setMuted(true);
+      setNeedsSound(false);
+      showControls();
       return;
     }
     video.muted = false;
     try {
       await video.play();
+      if (video.paused || video.muted) throw new DOMException("blocked", "NotAllowedError");
       setMuted(false);
+      setNeedsSound(false);
+      showControls();
     } catch {
       video.muted = true;
+      void video.play().catch(() => undefined);
       setMuted(true);
+      setNeedsSound(true);
+      showControls();
     }
   }
 
@@ -248,6 +362,29 @@ export function Watch({ token, debug, onEnded }: WatchProps) {
       // fullscreen is optional on browsers that refuse it
     }
   }
+
+  // Enter is the D-pad activation key, so it only reveals hidden controls once; `m` and `f`
+  // mirror the buttons without stealing a focused button's own activation.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const hidden = !controlsRef.current;
+      showControls();
+      if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key === "Enter" && hidden) {
+        event.preventDefault();
+        return;
+      }
+      if (event.key === "m" || event.key === "M") {
+        event.preventDefault();
+        void toggleMute();
+      } else if (event.key === "f" || event.key === "F") {
+        event.preventDefault();
+        void toggleFullscreen();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [muted, showControls]);
 
   function stopWatching(): void {
     const socket = socketRef.current;
@@ -278,9 +415,33 @@ audio  ${stats.audio === null ? "n/a" : `${Math.round(stats.audio * 100)}%`}`}
         </pre>
       )}
 
+      {connection.phase === "reconnecting" && (
+        <div className="watch-reconnect" role="status">
+          <p>Connection lost. Reconnecting...</p>
+        </div>
+      )}
+
+      {connection.phase === "lost" && (
+        <div className="watch-reconnect" role="alert">
+          <p>The connection was lost.</p>
+          <button
+            ref={reconnectRef}
+            type="button"
+            onClick={() => finishRef.current("Connection lost. Pair again.")}
+          >
+            Reconnect
+          </button>
+        </div>
+      )}
+
       <div className={controls ? "watch-controls" : "watch-controls is-hidden"}>
-        <button ref={muteRef} type="button" onClick={() => void toggleMute()}>
-          {muted ? "Sound" : "Mute"}
+        <button
+          ref={muteRef}
+          className={needsSound ? "is-attention" : undefined}
+          type="button"
+          onClick={() => void toggleMute()}
+        >
+          {muted ? (needsSound ? "Press OK for sound" : "Sound") : "Mute"}
         </button>
         <button type="button" onClick={() => void toggleFullscreen()}>
           {fullscreen ? "Exit fullscreen" : "Fullscreen"}

@@ -4,7 +4,7 @@ import type { Quality, StartRequest } from "../shared/ipc.ts";
 import type { Signal } from "../shared/protocol.ts";
 import { RTC_CONFIG } from "../shared/rtc.ts";
 
-export type MirrorStatus = "idle" | "starting" | "waiting" | "live" | "error";
+export type MirrorStatus = "idle" | "starting" | "waiting" | "live" | "reconnecting" | "error";
 
 export type MirrorState = { status: MirrorStatus; error: string | null; audio: boolean };
 
@@ -100,13 +100,15 @@ export function createMirror(): Mirror {
     return { ok: false, error: "cancelled" };
   }
 
-  async function offer(): Promise<boolean> {
+  async function offer(restart = false): Promise<boolean> {
     const peer = pc;
-    if (peer === null || offering || offered || answered) return true;
+    if (peer === null || offering) return true;
+    if (!restart && (offered || answered)) return true;
     if (peer.signalingState !== "stable") return true;
 
     offering = true;
     try {
+      if (restart) peer.restartIce();
       const local = await peer.createOffer();
       await peer.setLocalDescription(local);
       if (peer !== pc) return false;
@@ -114,7 +116,7 @@ export function createMirror(): Mirror {
       if (peer.localDescription !== null) {
         window.mirror.sendSignal({ type: "offer", sdp: peer.localDescription.sdp });
       }
-      emit({ status: "waiting", error: null });
+      emit({ status: restart ? "reconnecting" : "waiting", error: null });
       return true;
     } catch (err) {
       if (peer === pc) fail(err instanceof Error ? err.message : String(err));
@@ -160,6 +162,7 @@ export function createMirror(): Mirror {
       if ((peer.getConfiguration().iceServers ?? []).length > 0) {
         throw new Error("iceServers must stay empty");
       }
+      let iceRestarted = false;
 
       peer.addTrack(video, capture);
       const audio = capture.getAudioTracks()[0] ?? null;
@@ -182,8 +185,20 @@ export function createMirror(): Mirror {
       };
       peer.onconnectionstatechange = () => {
         if (peer !== pc) return;
-        if (peer.connectionState === "connected") emit({ status: "live", error: null });
-        if (peer.connectionState === "failed") fail("Peer connection failed");
+        if (peer.connectionState === "connected") {
+          iceRestarted = false;
+          emit({ status: "live", error: null });
+        }
+        if (peer.connectionState === "failed") {
+          if (iceRestarted) {
+            fail("Peer connection failed");
+            return;
+          }
+          // The host is the offerer: one ICE restart per failure, then give up. The viewer
+          // requests the matching restart on its own failed state.
+          iceRestarted = true;
+          void offer(true);
+        }
       };
 
       pc = peer;

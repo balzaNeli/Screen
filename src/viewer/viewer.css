@@ -139,6 +139,8 @@ button:focus {
 .watch {
   position: fixed;
   inset: 0;
+  /* TV overscan crops the outer 5%; the video and overlays stay inside it. */
+  padding: 5vmin;
   background: #000;
 }
 
@@ -158,6 +160,30 @@ button:focus {
   padding: 5vmin;
   font-size: clamp(1.25rem, 3.5vmin, 2.5rem);
   color: #e0e0e0;
+}
+
+.watch-reconnect {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3vmin;
+  padding: 5vmin;
+  background: rgba(0, 0, 0, 0.82);
+  text-align: center;
+  font-size: clamp(1.25rem, 3.5vmin, 2.5rem);
+}
+
+.watch-reconnect p {
+  margin: 0;
+}
+
+.watch-reconnect button {
+  padding: 2vmin 4vmin;
+  font-size: clamp(1rem, 2.8vmin, 1.75rem);
 }
 
 .watch-controls {
@@ -180,6 +206,10 @@ button:focus {
   padding: 2vmin 4vmin;
   font-size: clamp(1rem, 2.8vmin, 1.75rem);
   background: rgba(18, 18, 18, 0.85);
+}
+
+.watch-controls button.is-attention {
+  border-color: #ffcc80;
 }
 
 .watch-debug {

@@ -56,6 +56,8 @@ export function App() {
   const [audioSupported, setAudioSupported] = useState<boolean | null>(null);
   const [state, setState] = useState<MirrorState>({ status: "idle", error: null, audio: false });
   const [notice, setNotice] = useState<string | null>(null);
+  const engineActive =
+    state.status === "live" || state.status === "waiting" || state.status === "reconnecting";
 
   async function loadSources(): Promise<void> {
     setSourcesLoading(true);
@@ -126,7 +128,7 @@ export function App() {
 
   async function toggleAudio(on: boolean): Promise<void> {
     setNotice(null);
-    if (state.status !== "live" && state.status !== "waiting") {
+    if (!engineActive) {
       setAudioOn(on);
       return;
     }
@@ -144,7 +146,7 @@ export function App() {
 
   async function changeQuality(next: Quality): Promise<void> {
     setNotice(null);
-    if (state.status !== "live" && state.status !== "waiting") {
+    if (!engineActive) {
       setQuality(next);
       return;
     }
@@ -162,9 +164,8 @@ export function App() {
     }
   }
 
-  const active = state.status === "starting" || state.status === "waiting" || state.status === "live";
-  const audioChecked =
-    state.status === "waiting" || state.status === "live" ? state.audio : audioOn;
+  const active = state.status === "starting" || engineActive;
+  const audioChecked = engineActive ? state.audio : audioOn;
   const viewer = host?.viewer ?? null;
   const fallbackPort = portOf(host?.urls[0]);
   const portFallback =
@@ -177,7 +178,8 @@ export function App() {
   else if (state.status === "waiting") {
     statusText =
       viewer === null ? "Capturing. Waiting for a viewer." : "Viewer connected. Negotiating...";
-  } else if (state.status === "live") statusText = "Streaming to the viewer.";
+  } else if (state.status === "reconnecting") statusText = "Reconnecting to the viewer...";
+  else if (state.status === "live") statusText = "Streaming to the viewer.";
   else if (state.status === "error") statusText = state.error ?? "Capture failed.";
 
   return (

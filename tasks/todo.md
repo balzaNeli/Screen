@@ -435,18 +435,26 @@ buttons; auto-hide and restore controls; on `iceConnectionState === "failed"` at
 `object-fit: contain` and correct overscan margins.
 
 **Acceptance criteria:**
-- [ ] Unmuted playback blocked → video still plays, one clear affordance enables sound, no error toast
-- [ ] `restartIce()` is attempted exactly once per failure and recovers a simulated drop (toggle the host's Wi-Fi or kill the server socket)
-- [ ] Host `stop` produces the stopped screen within 1 s, and the viewer can re-pair without a reload
-- [ ] Hotkeys and buttons stay in sync (mute state reflected in both)
-- [ ] No control is reachable only by mouse or only by touch
+- [x] Unmuted playback blocked → video still plays, one clear affordance enables sound, no error toast
+- [x] `restartIce()` is attempted exactly once per failure and recovers a simulated drop (toggle the host's Wi-Fi or kill the server socket)
+- [x] Host `stop` produces the stopped screen within 1 s, and the viewer can re-pair without a reload
+- [x] Hotkeys and buttons stay in sync (mute state reflected in both)
+- [x] No control is reachable only by mouse or only by touch
 
 **Verification:**
-- [ ] Tests: `npm test` (reconnect state machine as a pure reducer)
+- [x] Tests: `npm test` (reconnect state machine as a pure reducer)
 - [ ] Manual: network-drop test on the real device; blocked-autoplay test in a fresh browser profile
 
+**Result 2026-10-22:** CDP against the Electron host and an Edge viewer: blocked autoplay kept
+the video playing with one sound affordance; one Enter unmuted; `m`/`f`/Enter and the buttons
+stayed in sync; overscan measured 829x844 inside 921x936; one restarted host offer and one viewer
+`restartIce()` per failure; a failed restart showed the reconnect screen without another request;
+re-pair resumed capture without a reload; host Stop reached the stopped screen in 45 ms. 51 tests,
+`npx tsc -p tsconfig.json` clean, `npm run verify` green. Details in `docs/manual-tests.md`.
+
 **Dependencies:** Checkpoint 3
-**Files:** `src/viewer/Watch.tsx`, `src/viewer/stats.ts`, `src/viewer/viewer.css`
+**Files:** `src/viewer/Watch.tsx`, `src/viewer/connection.ts`, `src/viewer/viewer.css`,
+`src/renderer/mirror.ts`, `src/renderer/App.tsx`, `tests/reconnect.test.ts`
 **Scope:** M
 
 ---

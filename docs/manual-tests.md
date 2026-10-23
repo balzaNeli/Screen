@@ -238,6 +238,30 @@ run and the payload unit test); the no-LAN and audio-unsupported messages were n
 hardware; the source picker was loaded but not switched mid-run. The 1080p30 caveat from Checkpoint
 3 is unchanged.
 
+## Task 12 — viewer polish (2026-10-22 CDP, Edge 155)
+
+Driven over CDP against the real Electron host and an Edge viewer; no mocks. A deterministic hook
+rejected unmuted `play()` until the test allowed it, and the reconnect checks pushed synthetic
+`failed`/`connected` states through the real peer and signaling path.
+
+| Check | Result |
+|---|---|
+| Blocked autoplay | video stayed playing at 1920x1080, muted; one "Press OK for sound" control; no error toast |
+| Sound recovery | one Enter on the focused control unmuted; the control became "Mute"; `m` toggled both ways |
+| Controls | hidden after 5 s; a key restored them; Enter only revealed them (did not activate a hidden button) |
+| Fullscreen | `f` entered and exited fullscreen |
+| Overscan | video 829x844 inside a 921x936 viewport, `object-fit: contain` |
+| Host ICE restart | a synthetic host failure sent exactly one restarted offer; the viewer answered; the stream stayed live |
+| Viewer ICE restart | one `restartIce()` on the first failure; a connected state recovered it; a genuine second failure showed the reconnect screen without another restart |
+| Reconnect button | returned to the PIN pad with "Connection lost. Pair again."; no page reload |
+| Re-pair | paired again and resumed capture without a reload |
+| Host Stop | stopped screen 45 ms after the button's click handler; a synthetic CDP mouse-event run was dominated by input dispatch, not app time |
+| Tests | 51 passing; `npx tsc -p tsconfig.json` clean; `npm run verify` green |
+
+**Not exercised here:** a physical Wi-Fi drop and a fresh-profile autoplay block on a phone or Fire
+TV; the real-remote Stop and overscan rows. The simulated drop covers the reducer and signaling
+path, not a real network-interface change.
+
 ## Phone / tablet pass (final acceptance)
 
 | # | Check | Result |
